@@ -25,6 +25,8 @@ import android.util.Log;
 import java.util.List;
 
 public class LocationService extends Service {
+    private static int UPDATE_DELAY_MILLIS = 4000;
+
     protected static Logger logger = new Logger();
     private TelephonyManager mTelephonyManager;
     private Database db;
@@ -55,7 +57,7 @@ public class LocationService extends Service {
     public void onCreate() {
         Log.v("cellologica", getClass().getName()+".onCreate()");
         Log.v("cellulogica", "using db: "+getDataPath());
-        db = new Database(this);
+        db = new Database(this, UPDATE_DELAY_MILLIS+20000);
         userMessage("using db: "+getDataPath());
         running = true;
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
@@ -68,7 +70,7 @@ public class LocationService extends Service {
                 if (running) {
                     Log.v("cellulogica", "Update cell info");
                     updateCellInfo();
-                    handler.postDelayed(this, 10000);
+                    handler.postDelayed(this, UPDATE_DELAY_MILLIS);
                 }
             }
         };

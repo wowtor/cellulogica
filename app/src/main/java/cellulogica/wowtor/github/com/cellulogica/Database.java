@@ -1,5 +1,6 @@
 package cellulogica.wowtor.github.com.cellulogica;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -10,20 +11,25 @@ import android.telephony.CellInfoGsm;
 import android.telephony.CellInfoLte;
 import android.telephony.CellInfoWcdma;
 import android.telephony.gsm.GsmCellLocation;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 public class Database {
     private SQLiteDatabase db;
+    private Date previous_date = null;
+    private long _update_tolerance_millis;
 
     public static File getDataPath(Context ctx) {
         return new File(ctx.getExternalFilesDir(null), "cellinfo.sqlite3");
     }
 
-    public Database(Context ctx) {
+    public Database(Context ctx, int update_tolerance_millis) {
+        _update_tolerance_millis = update_tolerance_millis;
         db = SQLiteDatabase.openOrCreateDatabase(getDataPath(ctx), null);
         createTables();
     }
@@ -32,9 +38,10 @@ public class Database {
         Date date = new Date();
 
         for (CellInfo info : lst) {
-            if (info.isRegistered())
-                storeCellInfo(date, info);
+            storeCellInfo(date, info);
         }
+
+        previous_date = date;
     }
 
     public void storeCellInfo(Date date, CellInfo info) {
@@ -51,54 +58,75 @@ public class Database {
         }
     }
 
+    private void updateCellInfo(String table, Date date, ContentValues values) {
+        if (previous_date != null && date.getTime() < previous_date.getTime() + _update_tolerance_millis) {
+            ContentValues update = new ContentValues();
+            update.put("date_end", date.getTime());
+
+            ArrayList<String> qwhere = new ArrayList<String>();
+            ArrayList<String> qargs = new ArrayList<String>();
+            qwhere.add("date_end = ?");
+            qargs.add(Long.toString(previous_date.getTime()));
+            for (String key : values.keySet()) {
+                qwhere.add(String.format("%s = ?", key));
+                qargs.add(values.getAsString(key));
+            }
+
+            int nrows = db.update(table, update, TextUtils.join(" AND ", qwhere), qargs.toArray(new String[0]));
+            if (nrows > 0)
+                return;
+        }
+
+        ContentValues insert = new ContentValues(values);
+        insert.put("date_start", date.getTime());
+        insert.put("date_end", date.getTime());
+        db.insert(table, null, insert);
+    }
+
     private void storeCellInfoGsm(Date date, CellInfoGsm info) {
-        db.execSQL(String.format("INSERT INTO cellinfogsm VALUES(%d,%d,%d,%d,%d,%d,%d,%d)",
-                date.getTime(),
-                info.isRegistered() ? 1 : 0,
-                info.getCellIdentity().getMcc(),
-                info.getCellIdentity().getMnc(),
-                info.getCellIdentity().getLac(),
-                info.getCellIdentity().getCid(),
-                info.getCellIdentity().getBsic(),
-                info.getCellIdentity().getArfcn()
-        ));
+        ContentValues content = new ContentValues();
+        content.put("registered", info.isRegistered());
+        content.put("mcc", info.getCellIdentity().getMcc());
+        content.put("mnc", info.getCellIdentity().getMnc());
+        content.put("lac", info.getCellIdentity().getLac());
+        content.put("cid", info.getCellIdentity().getCid());
+        content.put("bsic", info.getCellIdentity().getBsic());
+        content.put("arfcn", info.getCellIdentity().getArfcn());
+        updateCellInfo("cellinfogsm", date, content);
     }
 
     private void storeCellInfoCdma(Date date, CellInfoCdma info) {
-        db.execSQL(String.format("INSERT INTO cellinfocdma VALUES(%d,%d,%d,%d,%d,%d,%d)",
-                date.getTime(),
-                info.isRegistered() ? 1 : 0,
-                info.getCellIdentity().getBasestationId(),
-                info.getCellIdentity().getLatitude(),
-                info.getCellIdentity().getLongitude(),
-                info.getCellIdentity().getNetworkId(),
-                info.getCellIdentity().getSystemId()
-        ));
+        ContentValues content = new ContentValues();
+        content.put("registered", info.isRegistered());
+        content.put("basestationid", info.getCellIdentity().getBasestationId());
+        content.put("latitude", info.getCellIdentity().getLatitude());
+        content.put("longitude", info.getCellIdentity().getLongitude());
+        content.put("networkid", info.getCellIdentity().getNetworkId());
+        content.put("systemid", info.getCellIdentity().getSystemId());
+        updateCellInfo("cellinfocdma", date, content);
     }
 
     private void storeCellInfoWcdma(Date date, CellInfoWcdma info) {
-        db.execSQL(String.format("INSERT INTO cellinfowcdma VALUES(%d,%d,%d,%d,%d,%d,%d,%d)",
-                date.getTime(),
-                info.isRegistered() ? 1 : 0,
-                info.getCellIdentity().getMcc(),
-                info.getCellIdentity().getMnc(),
-                info.getCellIdentity().getLac(),
-                info.getCellIdentity().getCid(),
-                info.getCellIdentity().getPsc(),
-                info.getCellIdentity().getUarfcn()
-        ));
+        ContentValues content = new ContentValues();
+        content.put("registered", info.isRegistered());
+        content.put("mcc", info.getCellIdentity().getMcc());
+        content.put("mnc", info.getCellIdentity().getMnc());
+        content.put("lac", info.getCellIdentity().getLac());
+        content.put("cid", info.getCellIdentity().getCid());
+        content.put("psc", info.getCellIdentity().getPsc());
+        content.put("uarfcn", info.getCellIdentity().getUarfcn());
+        updateCellInfo("cellinfowcdma", date, content);
     }
 
     private void storeCellInfoLte(Date date, CellInfoLte info) {
-        db.execSQL(String.format("INSERT INTO cellinfolte VALUES(%d,%d,%d,%d,%d,%d,%d)",
-                date.getTime(),
-                info.isRegistered() ? 1 : 0,
-                info.getCellIdentity().getMcc(),
-                info.getCellIdentity().getMnc(),
-                info.getCellIdentity().getTac(),
-                info.getCellIdentity().getCi(),
-                info.getCellIdentity().getPci()
-        ));
+        ContentValues content = new ContentValues();
+        content.put("registered", info.isRegistered());
+        content.put("mcc", info.getCellIdentity().getMcc());
+        content.put("mnc", info.getCellIdentity().getMnc());
+        content.put("tac", info.getCellIdentity().getTac());
+        content.put("ci", info.getCellIdentity().getCi());
+        content.put("pci", info.getCellIdentity().getPci());
+        updateCellInfo("cellinfolte", date, content);
     }
 
     public void dropTables() {
@@ -110,7 +138,8 @@ public class Database {
 
     private void createTables() {
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfogsm ("+
-                "  date INT NOT NULL,"+
+                "  date_start INT NOT NULL,"+
+                "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+
                 "  mcc INT NOT NULL,"+
                 "  mnc INT NOT NULL,"+
@@ -121,7 +150,8 @@ public class Database {
                 ")");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfocdma ("+
-                "  date INT NOT NULL,"+
+                "  date_start INT NOT NULL,"+
+                "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+
                 "  basestationid INT NOT NULL,"+
                 "  latitude INT NOT NULL,"+
@@ -131,10 +161,11 @@ public class Database {
                 ")");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfowcdma ("+
-                "  date INT NOT NULL,"+
+                "  date_start INT NOT NULL,"+
+                "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+
                 "  mcc INT NOT NULL,"+
-                "  mcn INT NOT NULL,"+
+                "  mnc INT NOT NULL,"+
                 "  lac INT NOT NULL,"+
                 "  cid INT NOT NULL,"+
                 "  psc INT NOT NULL,"+ // 9-bit UMTS Primary Scrambling Code described in TS 25.331
@@ -142,10 +173,11 @@ public class Database {
                 ")");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfolte ("+
-                "  date INT NOT NULL,"+
+                "  date_start INT NOT NULL,"+
+                "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+
                 "  mcc INT NOT NULL,"+
-                "  mcn INT NOT NULL,"+
+                "  mnc INT NOT NULL,"+
                 "  tac INT NOT NULL,"+
                 "  ci INT NOT NULL,"+ // 28-bit Cell Identity
                 "  pci INT NOT NULL"+ // Physical Cell Id 0..503, Integer.MAX_VALUE if unknown

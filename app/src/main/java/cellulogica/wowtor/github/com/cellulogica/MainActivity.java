@@ -135,9 +135,9 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
             public void onClick(DialogInterface dialog, int which) {
                 switch (which){
                     case DialogInterface.BUTTON_POSITIVE:
-                        Database db = new Database(MainActivity.this);
-                        db.dropTables();
-                        userMessage("database reset");
+                        File path = Database.getDataPath(MainActivity.this);
+                        path.delete();
+                        userMessage("database deleted");
                         break;
 
                     case DialogInterface.BUTTON_NEGATIVE:
