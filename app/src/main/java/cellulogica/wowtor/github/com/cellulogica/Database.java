@@ -34,27 +34,31 @@ public class Database {
         createTables();
     }
 
-    public void storeCellInfo(List<CellInfo> lst) {
+    public String[] storeCellInfo(List<CellInfo> lst) {
         Date date = new Date();
 
+        List<String> cells = new ArrayList<String>();
         for (CellInfo info : lst) {
-            storeCellInfo(date, info);
+            if (info.isRegistered()) // unregistered cell info objects tend to contain no useful data
+                cells.add(storeCellInfo(date, info));
         }
 
         previous_date = date;
+        return cells.toArray(new String[0]);
     }
 
-    public void storeCellInfo(Date date, CellInfo info) {
+    public String storeCellInfo(Date date, CellInfo info) {
         if (info instanceof CellInfoGsm) {
-            storeCellInfoGsm(date, (CellInfoGsm)info);
+            return storeCellInfoGsm(date, (CellInfoGsm)info);
         } else if (info instanceof CellInfoCdma) {
-            storeCellInfoCdma(date, (CellInfoCdma)info);
+            return storeCellInfoCdma(date, (CellInfoCdma)info);
         } else if (info instanceof CellInfoWcdma) {
-            storeCellInfoWcdma(date, (CellInfoWcdma)info);
+            return storeCellInfoWcdma(date, (CellInfoWcdma)info);
         } else if (info instanceof CellInfoLte) {
-            storeCellInfoLte(date, (CellInfoLte) info);
+            return storeCellInfoLte(date, (CellInfoLte) info);
         } else {
             Log.w("cellulogica", "Unrecognized cell info object");
+            return "unrecognized";
         }
     }
 
@@ -80,12 +84,29 @@ public class Database {
         ContentValues insert = new ContentValues(values);
         insert.put("date_start", date.getTime());
         insert.put("date_end", date.getTime());
+        Log.v("cellulogica", "new cell: "+insert);
         db.insert(table, null, insert);
     }
 
-    private void storeCellInfoGsm(Date date, CellInfoGsm info) {
+    private static String toString(CellInfoGsm info) {
+        return String.format("%s/gsm:%d-%d-%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
+    }
+
+    private static String toString(CellInfoCdma info) {
+        return String.format("%s/cdma:%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getBasestationId(), info.getCellIdentity().getNetworkId());
+    }
+
+    private static String toString(CellInfoWcdma info) {
+        return String.format("%s/wcdma:%d-%d-%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
+    }
+
+    private static String toString(CellInfoLte info) {
+        return String.format("%s/lte:%d-%d-%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getTac(), info.getCellIdentity().getCi());
+    }
+
+    private String storeCellInfoGsm(Date date, CellInfoGsm info) {
         ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered());
+        content.put("registered", info.isRegistered() ? 1 : 0);
         content.put("mcc", info.getCellIdentity().getMcc());
         content.put("mnc", info.getCellIdentity().getMnc());
         content.put("lac", info.getCellIdentity().getLac());
@@ -93,22 +114,26 @@ public class Database {
         content.put("bsic", info.getCellIdentity().getBsic());
         content.put("arfcn", info.getCellIdentity().getArfcn());
         updateCellInfo("cellinfogsm", date, content);
+
+        return toString(info);
     }
 
-    private void storeCellInfoCdma(Date date, CellInfoCdma info) {
+    private String storeCellInfoCdma(Date date, CellInfoCdma info) {
         ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered());
+        content.put("registered", info.isRegistered() ? 1 : 0);
         content.put("basestationid", info.getCellIdentity().getBasestationId());
         content.put("latitude", info.getCellIdentity().getLatitude());
         content.put("longitude", info.getCellIdentity().getLongitude());
         content.put("networkid", info.getCellIdentity().getNetworkId());
         content.put("systemid", info.getCellIdentity().getSystemId());
         updateCellInfo("cellinfocdma", date, content);
+
+        return toString(info);
     }
 
-    private void storeCellInfoWcdma(Date date, CellInfoWcdma info) {
+    private String storeCellInfoWcdma(Date date, CellInfoWcdma info) {
         ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered());
+        content.put("registered", info.isRegistered() ? 1 : 0);
         content.put("mcc", info.getCellIdentity().getMcc());
         content.put("mnc", info.getCellIdentity().getMnc());
         content.put("lac", info.getCellIdentity().getLac());
@@ -116,17 +141,21 @@ public class Database {
         content.put("psc", info.getCellIdentity().getPsc());
         content.put("uarfcn", info.getCellIdentity().getUarfcn());
         updateCellInfo("cellinfowcdma", date, content);
+
+        return toString(info);
     }
 
-    private void storeCellInfoLte(Date date, CellInfoLte info) {
+    private String storeCellInfoLte(Date date, CellInfoLte info) {
         ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered());
+        content.put("registered", info.isRegistered() ? 1 : 0);
         content.put("mcc", info.getCellIdentity().getMcc());
         content.put("mnc", info.getCellIdentity().getMnc());
         content.put("tac", info.getCellIdentity().getTac());
         content.put("ci", info.getCellIdentity().getCi());
         content.put("pci", info.getCellIdentity().getPci());
         updateCellInfo("cellinfolte", date, content);
+
+        return toString(info);
     }
 
     public void dropTables() {

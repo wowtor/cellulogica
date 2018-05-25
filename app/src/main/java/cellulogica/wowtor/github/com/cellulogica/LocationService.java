@@ -2,16 +2,22 @@ package cellulogica.wowtor.github.com.cellulogica;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
+import android.support.v4.app.NotificationManagerCompat;
 import android.support.v4.content.ContextCompat;
 import android.telephony.CellInfo;
 import android.telephony.CellLocation;
@@ -20,8 +26,10 @@ import android.telephony.ServiceState;
 import android.telephony.TelephonyManager;
 import android.telephony.cdma.CdmaCellLocation;
 import android.telephony.gsm.GsmCellLocation;
+import android.text.TextUtils;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class LocationService extends Service {
@@ -81,20 +89,57 @@ public class LocationService extends Service {
     public void onDestroy() {
         running = false;
         Log.v("cellologica", getClass().getName()+".onDestroy()");
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.cancel(0);
     }
 
     private void userMessage(String s) {
         logger.message(s);
     }
 
+    private void createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            int importance = NotificationManager.IMPORTANCE_DEFAULT;
+            NotificationChannel channel = new NotificationChannel(NotificationChannel.DEFAULT_CHANNEL_ID, "cellulogica", importance);
+            channel.setDescription("cellulogica notification channel");
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private void updateCellInfo() {
         List<CellInfo> cellinfo = mTelephonyManager.getAllCellInfo();
+        String[] cellstr;
         try {
-            db.storeCellInfo(cellinfo);
+            cellstr = db.storeCellInfo(cellinfo);
+            if (cellstr.length == 0)
+                cellstr = new String[]{"no data"};
         } catch(Throwable e) {
             userMessage("error: "+e);
+            cellstr = new String[]{"error"};
         }
+
+        createNotificationChannel();
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle("Network cell")
+                .setContentText(String.format("%d cells", cellinfo.size()))
+                .setStyle(new NotificationCompat.BigTextStyle()
+                        .bigText(TextUtils.join("\n", cellstr)))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent);
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.notify(0, mBuilder.build());
+
         userMessage(String.format("%d cells found", cellinfo.size()));
     }
 
