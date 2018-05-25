@@ -1,6 +1,5 @@
 package cellulogica.wowtor.github.com.cellulogica;
 
-import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,15 +9,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
-import android.support.v4.content.ContextCompat;
 import android.telephony.CellInfo;
 import android.telephony.CellLocation;
 import android.telephony.PhoneStateListener;
@@ -30,6 +26,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class LocationService extends Service {
@@ -38,7 +35,27 @@ public class LocationService extends Service {
     protected static Logger logger = new Logger();
     private TelephonyManager mTelephonyManager;
     private Database db;
-    private boolean running = false;
+    private static boolean running = false;
+    private static List<Service> servicelist = Collections.synchronizedList(new ArrayList());
+
+    public static void start(Context ctx) {
+        running = true;
+        ctx.startService(new Intent(ctx, LocationService.class));
+        new LocationServiceRestarter(ctx);
+    }
+
+    public static void restartIfInactive(Context ctx) {
+        if (running) {
+            if (servicelist.isEmpty())
+                ctx.startService(new Intent(ctx, LocationService.class));
+            new LocationServiceRestarter(ctx);
+        }
+    }
+
+    public static void stop(Context ctx) {
+        running = false;
+        ctx.stopService(new Intent(ctx, LocationService.class));
+    }
 
     public String getDataPath() {
         PackageManager m = getPackageManager();
@@ -67,7 +84,9 @@ public class LocationService extends Service {
         Log.v("cellulogica", "using db: "+getDataPath());
         db = new Database(this, UPDATE_DELAY_MILLIS+20000);
         userMessage("using db: "+getDataPath());
-        running = true;
+
+        servicelist.add(this);
+
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
         mTelephonyManager.listen(new MyPhoneStateListener(), PhoneStateListener.LISTEN_CELL_INFO  | PhoneStateListener.LISTEN_CELL_LOCATION | PhoneStateListener.LISTEN_SERVICE_STATE);
 
@@ -87,7 +106,8 @@ public class LocationService extends Service {
 
     @Override
     public void onDestroy() {
-        running = false;
+        servicelist.remove(this);
+
         Log.v("cellologica", getClass().getName()+".onDestroy()");
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);

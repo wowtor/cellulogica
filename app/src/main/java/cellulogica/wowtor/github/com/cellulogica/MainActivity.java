@@ -154,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
 
     public void startRecording() {
         if (requestLocationPermission()) {
-            startService(new Intent(this, LocationService.class));
+            LocationService.start(this);
             Log.v("cellulogica", "Location service started");
         } else {
             userMessage("no permission -- try again");
@@ -162,7 +162,7 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
     }
 
     public void stopRecording() {
-        stopService(new Intent(this, LocationService.class));
+        LocationService.stop(this);
         Log.v("cellulogica", "Location service stopped");
         exportButton.setEnabled(true);
         clearButton.setEnabled(true);
