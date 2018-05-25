@@ -90,7 +90,11 @@ public class LocationService extends Service {
     @SuppressLint("MissingPermission")
     private void updateCellInfo() {
         List<CellInfo> cellinfo = mTelephonyManager.getAllCellInfo();
-        db.storeCellInfo(cellinfo);
+        try {
+            db.storeCellInfo(cellinfo);
+        } catch(Throwable e) {
+            userMessage("error: "+e);
+        }
         userMessage(String.format("%d cells found", cellinfo.size()));
     }
 

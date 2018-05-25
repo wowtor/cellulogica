@@ -145,7 +145,7 @@ public class Database {
                 "  mnc INT NOT NULL,"+
                 "  lac INT NOT NULL,"+ // Location Area Code
                 "  cid INT NOT NULL,"+ // Cell Identity
-                "  bsid INT NOT NULL,"+ // Base Station Identity
+                "  bsic INT NOT NULL,"+ // Base Station Identity Code
                 "  arfcn INT NOT NULL"+ // Absolute RF Channel Number
                 ")");
 
