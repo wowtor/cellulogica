@@ -9,7 +9,7 @@ import android.content.Intent;
 import java.util.Calendar;
 
 public class LocationServiceRestarter extends BroadcastReceiver {
-    private static final int TIMEOUT_IN_SECONDS = 4;
+    private static final int TIMEOUT_IN_SECONDS = 3600;
 
     // this constructor is called by the alarm manager.
     public LocationServiceRestarter() {

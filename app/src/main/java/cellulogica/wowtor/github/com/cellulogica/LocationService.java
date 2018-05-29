@@ -25,12 +25,19 @@ import android.telephony.gsm.GsmCellLocation;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 public class LocationService extends Service {
+    private static int NOTIFICATION_CELLINFO = 0;
+    private static int NOTIFICATION_STATUS = 1;
+    private static int NOTIFICATION_ERROR = 2;
+
     private static int UPDATE_DELAY_MILLIS = 4000;
+    private static int EVENT_VALIDITY_MILLIS = UPDATE_DELAY_MILLIS+20000;
 
     protected static Logger logger = new Logger();
     private TelephonyManager mTelephonyManager;
@@ -55,6 +62,11 @@ public class LocationService extends Service {
     public static void stop(Context ctx) {
         running = false;
         ctx.stopService(new Intent(ctx, LocationService.class));
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return Service.START_STICKY;
     }
 
     public String getDataPath() {
@@ -82,7 +94,7 @@ public class LocationService extends Service {
     public void onCreate() {
         Log.v("cellologica", getClass().getName()+".onCreate()");
         Log.v("cellulogica", "using db: "+getDataPath());
-        db = new Database(this, UPDATE_DELAY_MILLIS+20000);
+        db = new Database(this, EVENT_VALIDITY_MILLIS);
         userMessage("using db: "+getDataPath());
 
         servicelist.add(this);
@@ -102,6 +114,8 @@ public class LocationService extends Service {
             }
         };
         handler.post(timer);
+
+        updateServiceStatus("service started");
     }
 
     @Override
@@ -111,7 +125,9 @@ public class LocationService extends Service {
         Log.v("cellologica", getClass().getName()+".onDestroy()");
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        notificationManager.cancel(0);
+        notificationManager.cancel(NOTIFICATION_CELLINFO);
+
+        updateServiceStatus("service stopped");
     }
 
     private void userMessage(String s) {
@@ -130,6 +146,43 @@ public class LocationService extends Service {
         }
     }
 
+    private void updateNotification(int notification_id, NotificationCompat.Builder mBuilder) {
+        createNotificationChannel();
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+        mBuilder = mBuilder
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.notify(notification_id, mBuilder.build());
+    }
+
+    private void updateServiceStatus(String msg) {
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
+                .setContentTitle("Network cell")
+                .setContentText(msg);
+
+        updateNotification(NOTIFICATION_STATUS, mBuilder);
+    }
+
+    private void sendErrorNotification(Throwable e) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        e.printStackTrace(pw);
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
+                .setContentTitle("Error")
+                .setStyle(new NotificationCompat.BigTextStyle()
+                        .bigText(sw.toString()))
+                .setContentText(e.toString());
+
+        updateNotification(NOTIFICATION_ERROR, mBuilder);
+    }
+
     @SuppressLint("MissingPermission")
     private void updateCellInfo() {
         List<CellInfo> cellinfo = mTelephonyManager.getAllCellInfo();
@@ -140,25 +193,18 @@ public class LocationService extends Service {
                 cellstr = new String[]{"no data"};
         } catch(Throwable e) {
             userMessage("error: "+e);
+            sendErrorNotification(e);
             cellstr = new String[]{"error"};
         }
 
-        createNotificationChannel();
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
-
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentTitle("Network cell")
                 .setContentText(String.format("%d cells", cellinfo.size()))
                 .setStyle(new NotificationCompat.BigTextStyle()
                         .bigText(TextUtils.join("\n", cellstr)))
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(pendingIntent);
+                .setTimeoutAfter(EVENT_VALIDITY_MILLIS);
 
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        notificationManager.notify(0, mBuilder.build());
+        updateNotification(NOTIFICATION_CELLINFO, mBuilder);
 
         userMessage(String.format("%d cells found", cellinfo.size()));
     }
