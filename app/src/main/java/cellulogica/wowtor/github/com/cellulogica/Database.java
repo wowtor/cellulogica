@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoCdma;
@@ -15,6 +16,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -28,10 +30,24 @@ public class Database {
         return new File(ctx.getExternalFilesDir(null), "cellinfo.sqlite3");
     }
 
-    public Database(Context ctx, int update_tolerance_millis) {
+    public Database(int update_tolerance_millis) {
         _update_tolerance_millis = update_tolerance_millis;
-        db = SQLiteDatabase.openOrCreateDatabase(getDataPath(ctx), null);
-        createTables();
+        db = App.getDatabase();
+    }
+
+    public String getUpdateStatus() {
+        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
+
+        StringBuffer s = new StringBuffer();
+        for (String tab : new String[]{"cellinfogsm", "cellinfocdma", "cellinfowcdma", "cellinfolte"}) {
+            Cursor c = db.rawQuery("SELECT MAX(date_end) FROM cellinfogsm", new String[]{});
+            if (!c.isNull(0)) {
+                Date d = new Date(c.getInt(0));
+                s.append(String.format("%s\n", fmt.format(d)));
+            }
+        }
+
+        return s.toString();
     }
 
     public String[] storeCellInfo(List<CellInfo> lst) {
@@ -165,7 +181,7 @@ public class Database {
         db.execSQL("DROP TABLE IF EXISTS cellinfolte");
     }
 
-    private void createTables() {
+    protected static void createTables(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfogsm ("+
                 "  date_start INT NOT NULL,"+
                 "  date_end INT NOT NULL,"+

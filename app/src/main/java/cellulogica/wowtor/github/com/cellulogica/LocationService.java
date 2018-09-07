@@ -1,6 +1,7 @@
 package cellulogica.wowtor.github.com.cellulogica;
 
 import android.annotation.SuppressLint;
+import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -24,6 +25,7 @@ import android.telephony.cdma.CdmaCellLocation;
 import android.telephony.gsm.GsmCellLocation;
 import android.text.TextUtils;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -42,25 +44,14 @@ public class LocationService extends Service {
     protected static Logger logger = new Logger();
     private TelephonyManager mTelephonyManager;
     private Database db;
+
     private static boolean running = false;
-    private static List<Service> servicelist = Collections.synchronizedList(new ArrayList());
 
     public static void start(Context ctx) {
-        running = true;
         ctx.startService(new Intent(ctx, LocationService.class));
-        new LocationServiceRestarter(ctx);
-    }
-
-    public static void restartIfInactive(Context ctx) {
-        if (running) {
-            if (servicelist.isEmpty())
-                ctx.startService(new Intent(ctx, LocationService.class));
-            new LocationServiceRestarter(ctx);
-        }
     }
 
     public static void stop(Context ctx) {
-        running = false;
         ctx.stopService(new Intent(ctx, LocationService.class));
     }
 
@@ -90,14 +81,24 @@ public class LocationService extends Service {
         return null;
     }
 
+    private void scheduleRestart() {
+        Context context = getApplicationContext();
+        Intent intent = new Intent(context, LocationService.class);
+        PendingIntent pendingIntent = PendingIntent.getService(context, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+
+        AlarmManager alarmMgr = (AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
+        alarmMgr.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 60000, pendingIntent);
+    }
+
     @Override
     public void onCreate() {
+        running = true;
+        scheduleRestart();
+
         Log.v("cellologica", getClass().getName()+".onCreate()");
         Log.v("cellulogica", "using db: "+getDataPath());
-        db = new Database(this, EVENT_VALIDITY_MILLIS);
-        userMessage("using db: "+getDataPath());
-
-        servicelist.add(this);
+        db = new Database(EVENT_VALIDITY_MILLIS);
+        Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT);
 
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
         mTelephonyManager.listen(new MyPhoneStateListener(), PhoneStateListener.LISTEN_CELL_INFO  | PhoneStateListener.LISTEN_CELL_LOCATION | PhoneStateListener.LISTEN_SERVICE_STATE);
@@ -120,7 +121,7 @@ public class LocationService extends Service {
 
     @Override
     public void onDestroy() {
-        servicelist.remove(this);
+        running = false;
 
         Log.v("cellologica", getClass().getName()+".onDestroy()");
 
@@ -185,6 +186,8 @@ public class LocationService extends Service {
 
     @SuppressLint("MissingPermission")
     private void updateCellInfo() {
+        this.scheduleRestart();
+
         List<CellInfo> cellinfo = mTelephonyManager.getAllCellInfo();
         String[] cellstr;
         try {
@@ -192,7 +195,7 @@ public class LocationService extends Service {
             if (cellstr.length == 0)
                 cellstr = new String[]{"no data"};
         } catch(Throwable e) {
-            userMessage("error: "+e);
+            Toast.makeText(this, "error: "+e, Toast.LENGTH_SHORT);
             sendErrorNotification(e);
             cellstr = new String[]{"error"};
         }

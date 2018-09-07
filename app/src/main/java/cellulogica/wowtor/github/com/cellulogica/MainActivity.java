@@ -24,6 +24,7 @@ import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -47,8 +48,6 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        userMessage("hello!");
 
         exportButton = (Button)findViewById(R.id.exportButton);
         clearButton = (Button)findViewById(R.id.clearButton);
@@ -99,17 +98,14 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        userMessage("perm result");
         for (int i=0 ; i<permissions.length ; i++) {
             if (permissions[i] == Manifest.permission.ACCESS_COARSE_LOCATION && grantResults[i] == PackageManager.PERMISSION_GRANTED)
                 startRecording();
-            if (permissions[i] == Manifest.permission.READ_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED)
+            else if (permissions[i] == Manifest.permission.READ_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED)
                 exportData(null);
+            else
+                Toast.makeText(getApplicationContext(), "unknown permission granted: "+permissions[i], Toast.LENGTH_SHORT);
         }
-    }
-
-    public void userMessage(String s) {
-        LocationService.logger.message(s);
     }
 
     private static String getFileTitle() {
@@ -133,15 +129,16 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
         DialogInterface.OnClickListener dialogClickListener = new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
+                Context ctx = getApplicationContext();
                 switch (which){
                     case DialogInterface.BUTTON_POSITIVE:
                         File path = Database.getDataPath(MainActivity.this);
                         path.delete();
-                        userMessage("database deleted");
+                        Toast.makeText(ctx, "database deleted", Toast.LENGTH_SHORT);
                         break;
 
                     case DialogInterface.BUTTON_NEGATIVE:
-                        userMessage("pfew");
+                        //Toast.makeText(ctx, "pfew", Toast.LENGTH_SHORT);
                         break;
                 }
             }
@@ -153,16 +150,20 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
     }
 
     public void startRecording() {
+        Context ctx = getApplicationContext();
         if (requestLocationPermission()) {
             LocationService.start(this);
+            Toast.makeText(ctx, "Location service started", Toast.LENGTH_SHORT);
             Log.v("cellulogica", "Location service started");
         } else {
-            userMessage("no permission -- try again");
+            Toast.makeText(ctx, "no permission -- try again", Toast.LENGTH_SHORT);
         }
     }
 
     public void stopRecording() {
         LocationService.stop(this);
+        Context ctx = getApplicationContext();
+        Toast.makeText(ctx, "Location service stopped", Toast.LENGTH_SHORT);
         Log.v("cellulogica", "Location service stopped");
         exportButton.setEnabled(true);
         clearButton.setEnabled(true);
@@ -175,6 +176,7 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
 
     private void updateLogViewer(Logger logger) {
         TextView userMessages = (TextView)findViewById(R.id.userMessages);
-        userMessages.setText(logger.toString());
+        Database db = new Database(-1);
+        userMessages.setText(db.getUpdateStatus());
     }
 }
