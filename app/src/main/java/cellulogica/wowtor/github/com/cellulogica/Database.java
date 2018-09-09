@@ -85,7 +85,9 @@ public class Database {
     }
 
     private void updateCellInfo(String table, Date date, ContentValues values) {
-        if (previous_date != null && date.getTime() < previous_date.getTime() + _update_tolerance_millis) {
+        boolean contiguous = previous_date != null && date.getTime() < previous_date.getTime() + _update_tolerance_millis;
+
+        if (contiguous) {
             ContentValues update = new ContentValues();
             update.put("date_end", date.getTime());
 
