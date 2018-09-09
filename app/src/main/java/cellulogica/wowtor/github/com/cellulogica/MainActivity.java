@@ -1,12 +1,14 @@
 package cellulogica.wowtor.github.com.cellulogica;
 
 import android.Manifest;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -38,7 +40,7 @@ import java.util.List;
 
 import static android.support.v4.content.PermissionChecker.PERMISSION_GRANTED;
 
-public class MainActivity extends AppCompatActivity implements Logger.LogListener {
+public class MainActivity extends AppCompatActivity {
 
     private Button exportButton, clearButton;
     private Switch recorderSwitch;
@@ -63,19 +65,27 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
                     stopRecording();
             }
         });
+
+        final Handler handler = new Handler();
+        Runnable timer = new Runnable() {
+            @Override
+            public void run() {
+                Log.v(App.TITLE, "Update cell info");
+                updateLogViewer();;
+                handler.postDelayed(this, 1000);
+            }
+        };
+        handler.post(timer);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        LocationService.logger.listen(this);
-        updateLogViewer(LocationService.logger);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        LocationService.logger.removeListener(this);
     }
 
     private boolean requestLocationPermission() {
@@ -119,7 +129,7 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
             sharingIntent.setType("*/*");
             sharingIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, getFileTitle());
             Uri uri = Uri.fromFile(Database.getDataPath(this));
-            Log.v("cellulogica", "exists: " + Database.getDataPath(this).exists());
+            Log.v(App.TITLE, "exists: " + Database.getDataPath(this).exists());
             sharingIntent.putExtra(Intent.EXTRA_STREAM, uri);
             startActivity(Intent.createChooser(sharingIntent, "Share via"));
         }
@@ -154,7 +164,7 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
         if (requestLocationPermission()) {
             LocationService.start(this);
             Toast.makeText(ctx, "Location service started", Toast.LENGTH_SHORT);
-            Log.v("cellulogica", "Location service started");
+            Log.v(App.TITLE, "Location service started");
         } else {
             Toast.makeText(ctx, "no permission -- try again", Toast.LENGTH_SHORT);
         }
@@ -164,19 +174,26 @@ public class MainActivity extends AppCompatActivity implements Logger.LogListene
         LocationService.stop(this);
         Context ctx = getApplicationContext();
         Toast.makeText(ctx, "Location service stopped", Toast.LENGTH_SHORT);
-        Log.v("cellulogica", "Location service stopped");
+        Log.v(App.TITLE, "Location service stopped");
         exportButton.setEnabled(true);
         clearButton.setEnabled(true);
     }
 
-    @Override
-    public void logMessage(Logger.LogMessage msg, Logger logger) {
-        updateLogViewer(logger);
-    }
-
-    private void updateLogViewer(Logger logger) {
+    private void updateLogViewer() {
         TextView userMessages = (TextView)findViewById(R.id.userMessages);
         Database db = new Database(-1);
         userMessages.setText(db.getUpdateStatus());
+    }
+
+    private boolean isServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                Log.i (App.TITLE, "service is running");
+                return true;
+            }
+        }
+        Log.i (App.TITLE, false+"");
+        return false;
     }
 }

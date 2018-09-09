@@ -41,17 +41,18 @@ public class LocationService extends Service {
     private static int UPDATE_DELAY_MILLIS = 4000;
     private static int EVENT_VALIDITY_MILLIS = UPDATE_DELAY_MILLIS+20000;
 
-    protected static Logger logger = new Logger();
     private TelephonyManager mTelephonyManager;
     private Database db;
 
     private static boolean running = false;
 
     public static void start(Context ctx) {
+        running = true;
         ctx.startService(new Intent(ctx, LocationService.class));
     }
 
     public static void stop(Context ctx) {
+        running = false;
         ctx.stopService(new Intent(ctx, LocationService.class));
     }
 
@@ -67,7 +68,7 @@ public class LocationService extends Service {
         try {
             p = m.getPackageInfo(s, 0);
         } catch (PackageManager.NameNotFoundException e) {
-            Log.w("cellulogica", "Package name not found", e);
+            Log.w(App.TITLE, "Package name not found", e);
             return "cellinfo.sqlite";
         }
 
@@ -77,7 +78,7 @@ public class LocationService extends Service {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        Log.v("cellologica", getClass().getName()+".onBind()");
+        Log.v(App.TITLE, getClass().getName()+".onBind()");
         return null;
     }
 
@@ -95,20 +96,20 @@ public class LocationService extends Service {
         running = true;
         scheduleRestart();
 
-        Log.v("cellologica", getClass().getName()+".onCreate()");
-        Log.v("cellulogica", "using db: "+getDataPath());
+        Log.v(App.TITLE, getClass().getName()+".onCreate()");
+        Log.v(App.TITLE, "using db: "+getDataPath());
         db = new Database(EVENT_VALIDITY_MILLIS);
         Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT);
 
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
-        mTelephonyManager.listen(new MyPhoneStateListener(), PhoneStateListener.LISTEN_CELL_INFO  | PhoneStateListener.LISTEN_CELL_LOCATION | PhoneStateListener.LISTEN_SERVICE_STATE);
+        //mTelephonyManager.listen(new MyPhoneStateListener(), PhoneStateListener.LISTEN_CELL_INFO  | PhoneStateListener.LISTEN_CELL_LOCATION | PhoneStateListener.LISTEN_SERVICE_STATE);
 
         final Handler handler = new Handler();
         Runnable timer = new Runnable() {
             @Override
             public void run() {
                 if (running) {
-                    Log.v("cellulogica", "Update cell info");
+                    Log.v(App.TITLE, "Update cell info");
                     updateCellInfo();
                     handler.postDelayed(this, UPDATE_DELAY_MILLIS);
                 }
@@ -121,18 +122,15 @@ public class LocationService extends Service {
 
     @Override
     public void onDestroy() {
-        running = false;
-
-        Log.v("cellologica", getClass().getName()+".onDestroy()");
+        Log.v(App.TITLE, getClass().getName()+".onDestroy()");
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         notificationManager.cancel(NOTIFICATION_CELLINFO);
 
-        updateServiceStatus("service stopped");
-    }
+        if (running)
+            scheduleRestart();
 
-    private void userMessage(String s) {
-        logger.message(s);
+        updateServiceStatus("service stopped");
     }
 
     private void createNotificationChannel() {
@@ -140,7 +138,7 @@ public class LocationService extends Service {
         // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             int importance = NotificationManager.IMPORTANCE_DEFAULT;
-            NotificationChannel channel = new NotificationChannel(NotificationChannel.DEFAULT_CHANNEL_ID, "cellulogica", importance);
+            NotificationChannel channel = new NotificationChannel("default-channel", App.TITLE, importance);
             channel.setDescription("cellulogica notification channel");
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(channel);
@@ -163,7 +161,7 @@ public class LocationService extends Service {
     }
 
     private void updateServiceStatus(String msg) {
-        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "default-channel")
                 .setContentTitle("Network cell")
                 .setContentText(msg);
 
@@ -175,7 +173,7 @@ public class LocationService extends Service {
         PrintWriter pw = new PrintWriter(sw);
         e.printStackTrace(pw);
 
-        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "default-channel")
                 .setContentTitle("Error")
                 .setStyle(new NotificationCompat.BigTextStyle()
                         .bigText(sw.toString()))
@@ -200,7 +198,7 @@ public class LocationService extends Service {
             cellstr = new String[]{"error"};
         }
 
-        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NotificationChannel.DEFAULT_CHANNEL_ID)
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "default-channel")
                 .setContentTitle("Network cell")
                 .setContentText(String.format("%d cells", cellinfo.size()))
                 .setStyle(new NotificationCompat.BigTextStyle()
@@ -208,8 +206,6 @@ public class LocationService extends Service {
                 .setTimeoutAfter(EVENT_VALIDITY_MILLIS);
 
         updateNotification(NOTIFICATION_CELLINFO, mBuilder);
-
-        userMessage(String.format("%d cells found", cellinfo.size()));
     }
 
     private class MyPhoneStateListener extends PhoneStateListener {
@@ -220,11 +216,11 @@ public class LocationService extends Service {
          */
         public void onCellInfoChanged(List<CellInfo> cellInfo) {
             if (cellInfo == null)
-                Log.v("cellulogica","Cell info: no data");
+                Log.v(App.TITLE,"Cell info: no data");
             else {
-                Log.v("cellulogica", String.format("Cell info list: %d", cellInfo.size()));
+                Log.v(App.TITLE, String.format("Cell info list: %d", cellInfo.size()));
                 for (CellInfo info : cellInfo) {
-                    Log.v("cellulogica", String.format("Cell info: %s", info.toString()));
+                    Log.v(App.TITLE, String.format("Cell info: %s", info.toString()));
                 }
             }
         }
@@ -236,23 +232,23 @@ public class LocationService extends Service {
          */
         public void onCellLocationChanged(CellLocation location) {
             if (location == null) {
-                Log.v("cellulogica", "Cell location: null");
+                Log.v(App.TITLE, "Cell location: null");
             } else if (location instanceof GsmCellLocation) {
                 GsmCellLocation gsm = (GsmCellLocation) location;
-                userMessage(String.format("Cell location: gsm psc=%d; lac=%d; cid=%d", gsm.getPsc(), gsm.getLac(), gsm.getCid()));
             } else if (location instanceof CdmaCellLocation) {
                 CdmaCellLocation cdma = (CdmaCellLocation) location;
-                userMessage(String.format("Cell location: cdma %d-%d-%d / geo: %d-%d", cdma.getSystemId(), cdma.getNetworkId(), cdma.getBaseStationId(), cdma.getBaseStationLatitude(), cdma.getBaseStationLongitude()));
             } else {
-                userMessage(String.format("Cell location: %s", location.getClass().getName()));
+                // other
             }
+
+            Log.v(App.TITLE, "cell location changed");
         }
 
         public void onServiceStateChanged(ServiceState serviceState) {
             if (serviceState == null) {
-                Log.v("cellulogica", "Service state: null");
+                Log.v(App.TITLE, "Service state: null");
             } else {
-                Log.v("cellulogica", String.format("Service state: operator=%s", serviceState.getOperatorNumeric()));
+                Log.v(App.TITLE, String.format("Service state: operator=%s", serviceState.getOperatorNumeric()));
             }
         }
     }

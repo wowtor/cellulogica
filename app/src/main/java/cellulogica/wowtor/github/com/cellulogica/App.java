@@ -6,8 +6,10 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 public class App extends Application {
+    public static final String TITLE = "cellulogger";
     private static SQLiteOpenHelper dbhelper;
-    private static final int DATABASE_VERSION = 0;
+
+    private static final int DATABASE_VERSION = 1;
 
     public static SQLiteDatabase getDatabase() {
         return dbhelper.getWritableDatabase();

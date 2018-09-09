@@ -36,18 +36,24 @@ public class Database {
     }
 
     public String getUpdateStatus() {
-        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
+        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
         StringBuffer s = new StringBuffer();
         for (String tab : new String[]{"cellinfogsm", "cellinfocdma", "cellinfowcdma", "cellinfolte"}) {
-            Cursor c = db.rawQuery("SELECT MAX(date_end) FROM cellinfogsm", new String[]{});
+            Cursor c = db.rawQuery(String.format("SELECT MAX(date_end) FROM %s", tab), new String[]{});
+            c.moveToNext();
             if (!c.isNull(0)) {
-                Date d = new Date(c.getInt(0));
-                s.append(String.format("%s\n", fmt.format(d)));
+                Date d = new Date(c.getLong(0));
+                s.append(String.format("%s: updated %s\n", tab, fmt.format(d)));
             }
         }
 
         return s.toString();
+    }
+
+    public boolean isValid(CellInfo info) {
+        // TODO: improve by example https://github.com/zamojski/TowerCollector/tree/master/app/src/main/java/info/zamojski/soft/towercollector/collector/validators
+        return info.isRegistered();
     }
 
     public String[] storeCellInfo(List<CellInfo> lst) {
@@ -55,7 +61,7 @@ public class Database {
 
         List<String> cells = new ArrayList<String>();
         for (CellInfo info : lst) {
-            if (info.isRegistered()) // unregistered cell info objects tend to contain no useful data
+            if (isValid(info))
                 cells.add(storeCellInfo(date, info));
         }
 
