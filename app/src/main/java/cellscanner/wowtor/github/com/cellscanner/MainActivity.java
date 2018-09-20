@@ -1,4 +1,4 @@
-package cellulogica.wowtor.github.com.cellulogica;
+package cellscanner.wowtor.github.com.cellscanner;
 
 import android.Manifest;
 import android.app.ActivityManager;
@@ -13,13 +13,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.telephony.CellInfo;
-import android.telephony.CellLocation;
-import android.telephony.PhoneStateListener;
-import android.telephony.ServiceState;
-import android.telephony.TelephonyManager;
-import android.telephony.cdma.CdmaCellLocation;
-import android.telephony.gsm.GsmCellLocation;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -29,16 +22,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.net.URI;
 import java.text.SimpleDateFormat;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
-
-import static android.support.v4.content.PermissionChecker.PERMISSION_GRANTED;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -49,11 +34,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(cellscanner.wowtor.github.com.cellscanner.R.layout.activity_main);
 
-        exportButton = (Button)findViewById(R.id.exportButton);
-        clearButton = (Button)findViewById(R.id.clearButton);
-        recorderSwitch = (Switch)findViewById(R.id.recorderSwitch);
+        exportButton = (Button)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.exportButton);
+        clearButton = (Button)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.clearButton);
+        recorderSwitch = (Switch)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.recorderSwitch);
+
+        recorderSwitch.setChecked(LocationService.isRunning());
+        exportButton.setEnabled(!LocationService.isRunning());
+        clearButton.setEnabled(!LocationService.isRunning());
 
         recorderSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -180,7 +169,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateLogViewer() {
-        TextView userMessages = (TextView)findViewById(R.id.userMessages);
+        TextView userMessages = (TextView)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.userMessages);
         Database db = new Database(-1);
         userMessages.setText(db.getUpdateStatus());
     }

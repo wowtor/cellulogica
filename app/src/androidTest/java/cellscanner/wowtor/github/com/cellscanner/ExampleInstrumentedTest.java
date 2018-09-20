@@ -1,4 +1,4 @@
-package cellulogica.wowtor.github.com.cellulogica;
+package cellscanner.wowtor.github.com.cellscanner;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;

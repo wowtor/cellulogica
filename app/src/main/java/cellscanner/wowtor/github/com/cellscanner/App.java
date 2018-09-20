@@ -1,4 +1,4 @@
-package cellulogica.wowtor.github.com.cellulogica;
+package cellscanner.wowtor.github.com.cellscanner;
 
 import android.app.Application;
 import android.content.Context;
@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 public class App extends Application {
-    public static final String TITLE = "cellulogger";
+    public static final String TITLE = "cellscanner";
     private static SQLiteOpenHelper dbhelper;
 
     private static final int DATABASE_VERSION = 1;

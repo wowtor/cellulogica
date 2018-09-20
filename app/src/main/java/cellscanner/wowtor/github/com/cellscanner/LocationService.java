@@ -1,4 +1,4 @@
-package cellulogica.wowtor.github.com.cellulogica;
+package cellscanner.wowtor.github.com.cellscanner;
 
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
@@ -29,8 +29,6 @@ import android.widget.Toast;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class LocationService extends Service {
@@ -54,6 +52,10 @@ public class LocationService extends Service {
     public static void stop(Context ctx) {
         running = false;
         ctx.stopService(new Intent(ctx, LocationService.class));
+    }
+
+    public static boolean isRunning() {
+        return running;
     }
 
     @Override
@@ -152,7 +154,7 @@ public class LocationService extends Service {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
 
         mBuilder = mBuilder
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(cellscanner.wowtor.github.com.cellscanner.R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
 
