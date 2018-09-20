@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
             else if (permissions[i] == Manifest.permission.READ_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED)
                 exportData(null);
             else
-                Toast.makeText(getApplicationContext(), "unknown permission granted: "+permissions[i], Toast.LENGTH_SHORT);
+                Toast.makeText(getApplicationContext(), "unknown permission granted: "+permissions[i], Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -132,11 +132,11 @@ public class MainActivity extends AppCompatActivity {
                 switch (which){
                     case DialogInterface.BUTTON_POSITIVE:
                         App.resetDatabase(getApplicationContext());
-                        Toast.makeText(ctx, "database deleted", Toast.LENGTH_SHORT);
+                        Toast.makeText(ctx, "database deleted", Toast.LENGTH_SHORT).show();
                         break;
 
                     case DialogInterface.BUTTON_NEGATIVE:
-                        //Toast.makeText(ctx, "pfew", Toast.LENGTH_SHORT);
+                        Toast.makeText(ctx, "pfew", Toast.LENGTH_SHORT).show();
                         break;
                 }
             }
@@ -151,17 +151,17 @@ public class MainActivity extends AppCompatActivity {
         Context ctx = getApplicationContext();
         if (requestLocationPermission()) {
             LocationService.start(this);
-            Toast.makeText(ctx, "Location service started", Toast.LENGTH_SHORT);
+            Toast.makeText(ctx, "Location service started", Toast.LENGTH_SHORT).show();
             Log.v(App.TITLE, "Location service started");
         } else {
-            Toast.makeText(ctx, "no permission -- try again", Toast.LENGTH_SHORT);
+            Toast.makeText(ctx, "no permission -- try again", Toast.LENGTH_SHORT).show();
         }
     }
 
     public void stopRecording() {
         LocationService.stop(this);
         Context ctx = getApplicationContext();
-        Toast.makeText(ctx, "Location service stopped", Toast.LENGTH_SHORT);
+        Toast.makeText(ctx, "Location service stopped", Toast.LENGTH_SHORT).show();
         Log.v(App.TITLE, "Location service stopped");
         exportButton.setEnabled(true);
         clearButton.setEnabled(true);
