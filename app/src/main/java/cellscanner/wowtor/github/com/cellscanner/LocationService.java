@@ -36,9 +36,6 @@ public class LocationService extends Service {
     private static int NOTIFICATION_STATUS = 1;
     private static int NOTIFICATION_ERROR = 2;
 
-    private static int UPDATE_DELAY_MILLIS = 4000;
-    private static int EVENT_VALIDITY_MILLIS = UPDATE_DELAY_MILLIS+20000;
-
     private TelephonyManager mTelephonyManager;
     private Database db;
 
@@ -100,7 +97,9 @@ public class LocationService extends Service {
 
         Log.v(App.TITLE, getClass().getName()+".onCreate()");
         Log.v(App.TITLE, "using db: "+getDataPath());
-        db = new Database(EVENT_VALIDITY_MILLIS);
+        db = App.getDatabase();
+        db.storeSoftwareRevision(getApplicationContext());
+        db.storePhoneID(getApplicationContext());
         Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT);
 
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
@@ -113,7 +112,7 @@ public class LocationService extends Service {
                 if (running) {
                     Log.v(App.TITLE, "Update cell info");
                     updateCellInfo();
-                    handler.postDelayed(this, UPDATE_DELAY_MILLIS);
+                    handler.postDelayed(this, App.UPDATE_DELAY_MILLIS);
                 }
             }
         };
@@ -205,7 +204,7 @@ public class LocationService extends Service {
                 .setContentText(String.format("%d cells", cellinfo.size()))
                 .setStyle(new NotificationCompat.BigTextStyle()
                         .bigText(TextUtils.join("\n", cellstr)))
-                .setTimeoutAfter(EVENT_VALIDITY_MILLIS);
+                .setTimeoutAfter(App.EVENT_VALIDITY_MILLIS);
 
         updateNotification(NOTIFICATION_CELLINFO, mBuilder);
     }

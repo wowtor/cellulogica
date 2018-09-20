@@ -4,11 +4,13 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.provider.Settings;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoCdma;
 import android.telephony.CellInfoGsm;
 import android.telephony.CellInfoLte;
 import android.telephony.CellInfoWcdma;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -21,15 +23,13 @@ import java.util.List;
 public class Database {
     private SQLiteDatabase db;
     private Date previous_date = null;
-    private long _update_tolerance_millis;
 
     public static File getDataPath(Context ctx) {
         return new File(ctx.getExternalFilesDir(null), "cellinfo.sqlite3");
     }
 
-    public Database(int update_tolerance_millis) {
-        _update_tolerance_millis = update_tolerance_millis;
-        db = App.getDatabase();
+    public Database(SQLiteDatabase db) {
+        this.db = db;
     }
 
     public String getUpdateStatus() {
@@ -82,7 +82,7 @@ public class Database {
     }
 
     private void updateCellInfo(String table, Date date, ContentValues values) {
-        boolean contiguous = previous_date != null && date.getTime() < previous_date.getTime() + _update_tolerance_millis;
+        boolean contiguous = previous_date != null && date.getTime() < previous_date.getTime() + App.EVENT_VALIDITY_MILLIS;
 
         if (contiguous) {
             ContentValues update = new ContentValues();
@@ -180,13 +180,37 @@ public class Database {
     }
 
     public void dropTables() {
+        db.execSQL("DROP TABLE IF EXISTS meta");
         db.execSQL("DROP TABLE IF EXISTS cellinfogsm");
         db.execSQL("DROP TABLE IF EXISTS cellinfocdma");
         db.execSQL("DROP TABLE IF EXISTS cellinfowcdma");
         db.execSQL("DROP TABLE IF EXISTS cellinfolte");
     }
 
+    protected void storeSoftwareRevision(Context ctx) {
+        String android_id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
+
+        ContentValues content = new ContentValues();
+        content.put("entry", "revision");
+        content.put("value", R.string.revision);
+        db.insert("meta", null, content);
+    }
+
+    protected void storePhoneID(Context ctx) {
+        String android_id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
+
+        ContentValues content = new ContentValues();
+        content.put("entry", "android_id");
+        content.put("value", android_id);
+        db.insert("meta", null, content);
+    }
+
     protected static void createTables(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS meta ("+
+                "  entry VARCHAR(200) NOT NULL PRIMARY KEY,"+
+                "  value TEXT NOT NULL"+
+                ")");
+
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfogsm ("+
                 "  date_start INT NOT NULL,"+
                 "  date_end INT NOT NULL,"+

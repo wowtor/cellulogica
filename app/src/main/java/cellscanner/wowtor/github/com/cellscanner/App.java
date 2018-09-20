@@ -7,12 +7,15 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 public class App extends Application {
     public static final String TITLE = "cellscanner";
+    public static int UPDATE_DELAY_MILLIS = 4000;
+    public static int EVENT_VALIDITY_MILLIS = UPDATE_DELAY_MILLIS+20000;
+
     private static SQLiteOpenHelper dbhelper;
 
     private static final int DATABASE_VERSION = 1;
 
-    public static SQLiteDatabase getDatabase() {
-        return dbhelper.getWritableDatabase();
+    public static Database getDatabase() {
+        return new Database(dbhelper.getWritableDatabase());
     }
 
     private static class OpenHelper extends SQLiteOpenHelper {

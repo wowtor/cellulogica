@@ -170,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateLogViewer() {
         TextView userMessages = (TextView)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.userMessages);
-        Database db = new Database(-1);
+        Database db = App.getDatabase();
         userMessages.setText(db.getUpdateStatus());
     }
 
