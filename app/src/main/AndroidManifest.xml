@@ -16,7 +16,7 @@
         android:theme="@style/AppTheme">
 
         <receiver
-            android:name=".ServiceStartReceiver"
+            android:name=".BootDeviceReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
