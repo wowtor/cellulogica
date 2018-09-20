@@ -1,11 +1,8 @@
 #!/bin/bash
 
-STRINGS=app/src/main/res/values/strings.xml
+STRINGS=app/src/main/res/values/version_info.xml
 
-cat $STRINGS \
-| sed '/name="revision"/ {
-	a\    <string name="revision">'$(git rev-parse HEAD)'</string>
-	d
-}' \
->x
-mv x $STRINGS
+echo '<resources>
+    <string name="revision">080f789ef8c83af8b6b2bb23d5ba2b7f6623fbe7</string>
+</resources>
+' >$STRINGS
