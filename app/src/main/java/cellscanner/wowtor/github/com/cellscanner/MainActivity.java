@@ -131,8 +131,7 @@ public class MainActivity extends AppCompatActivity {
                 Context ctx = getApplicationContext();
                 switch (which){
                     case DialogInterface.BUTTON_POSITIVE:
-                        File path = Database.getDataPath(MainActivity.this);
-                        path.delete();
+                        App.resetDatabase(getApplicationContext());
                         Toast.makeText(ctx, "database deleted", Toast.LENGTH_SHORT);
                         break;
 

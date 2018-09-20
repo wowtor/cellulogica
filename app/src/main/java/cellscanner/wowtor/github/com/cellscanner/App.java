@@ -5,6 +5,8 @@ import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import java.io.File;
+
 public class App extends Application {
     public static final String TITLE = "cellscanner";
     public static int UPDATE_DELAY_MILLIS = 4000;
@@ -16,6 +18,15 @@ public class App extends Application {
 
     public static Database getDatabase() {
         return new Database(dbhelper.getWritableDatabase());
+    }
+
+    public static void resetDatabase(Context appcontext) {
+        dbhelper.close();
+
+        File path = Database.getDataPath(appcontext);
+        path.delete();
+
+        dbhelper = new OpenHelper(appcontext);
     }
 
     private static class OpenHelper extends SQLiteOpenHelper {
