@@ -98,8 +98,8 @@ public class LocationService extends Service {
         Log.v(App.TITLE, getClass().getName()+".onCreate()");
         Log.v(App.TITLE, "using db: "+getDataPath());
         db = App.getDatabase();
-        db.storeSoftwareRevision(getApplicationContext());
         db.storePhoneID(getApplicationContext());
+        db.storeVersionCode(getApplicationContext());
         Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT);
 
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);

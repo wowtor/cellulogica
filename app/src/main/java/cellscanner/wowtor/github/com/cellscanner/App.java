@@ -40,7 +40,8 @@ public class App extends Application {
         }
 
         @Override
-        public void onUpgrade(SQLiteDatabase sqLiteDatabase, int i, int i1) {
+        public void onUpgrade(SQLiteDatabase sqLiteDatabase, int oldVersion, int newVersion) {
+            Database.upgrade(sqLiteDatabase, oldVersion, newVersion);
         }
     }
 

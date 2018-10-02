@@ -2,6 +2,8 @@ package cellscanner.wowtor.github.com.cellscanner;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.Settings;
@@ -187,13 +189,38 @@ public class Database {
         db.execSQL("DROP TABLE IF EXISTS cellinfolte");
     }
 
-    protected void storeSoftwareRevision(Context ctx) {
-        String android_id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
+    protected String getMetaEntry(String name) {
+        Cursor c = db.query("meta", new String[]{"value"}, "entry = ?", new String[]{"versionCode"}, null, null, null);
+        if (!c.moveToNext())
+            return null;
+
+        return c.getString(0);
+    }
+
+    protected void storeVersionCode(Context ctx)
+    {
+        PackageInfo pInfo = null;
+        try {
+            pInfo = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.e("cellscanner", "error", e);
+            return;
+        }
+
+        int versionCode = pInfo.versionCode;
 
         ContentValues content = new ContentValues();
-        content.put("entry", "revision");
-        content.put("value", R.string.revision);
+        content.put("entry", "versionCode");
+        content.put("value", versionCode);
         db.insert("meta", null, content);
+    }
+
+    protected int getVersionCode() {
+        String versionCode = getMetaEntry("versionCode");
+        if (versionCode == null)
+            return -1;
+        else
+            return Integer.parseInt(versionCode);
     }
 
     protected void storePhoneID(Context ctx) {
@@ -203,6 +230,9 @@ public class Database {
         content.put("entry", "android_id");
         content.put("value", android_id);
         db.insert("meta", null, content);
+    }
+
+    protected static void upgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
     }
 
     protected static void createTables(SQLiteDatabase db) {
