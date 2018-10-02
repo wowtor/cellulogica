@@ -67,6 +67,8 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         handler.post(timer);
+
+        Toast.makeText(getApplicationContext(), String.format("Cellscanner service is %srunning.", LocationService.isRunning() ? "" : "not "), Toast.LENGTH_SHORT).show();
     }
 
     @Override
