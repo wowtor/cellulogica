@@ -138,9 +138,9 @@ public class LocationService extends Service {
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            int importance = NotificationManager.IMPORTANCE_DEFAULT;
+            int importance = NotificationManager.IMPORTANCE_MIN;
             NotificationChannel channel = new NotificationChannel("default-channel", App.TITLE, importance);
-            channel.setDescription("cellulogica notification channel");
+            channel.setDescription("notification channel");
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(channel);
         }
@@ -155,7 +155,7 @@ public class LocationService extends Service {
         mBuilder = mBuilder
                 .setSmallIcon(cellscanner.wowtor.github.com.cellscanner.R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                .setPriority(NotificationCompat.PRIORITY_MIN);
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         notificationManager.notify(notification_id, mBuilder.build());

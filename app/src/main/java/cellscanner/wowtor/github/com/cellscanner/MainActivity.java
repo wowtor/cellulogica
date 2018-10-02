@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
             else if (permissions[i] == Manifest.permission.READ_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED)
                 exportData(null);
             else
-                Toast.makeText(getApplicationContext(), "unknown permission granted: "+permissions[i], Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "Permission not recognized: "+permissions[i], Toast.LENGTH_LONG).show();
         }
     }
 
