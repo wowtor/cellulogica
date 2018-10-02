@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -127,11 +128,17 @@ public class MainActivity extends AppCompatActivity {
 
     public void exportData(View view) {
         if (requestFilePermission()) {
+            if (!Database.getDataPath(this).exists())
+            {
+                Toast.makeText(getApplicationContext(), "No database present.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Uri uri = FileProvider.getUriForFile(getApplicationContext(), "com.github.wowtor.cellscanner.fileprovider", Database.getDataPath(getApplicationContext()));
+
             Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
             sharingIntent.setType("*/*");
             sharingIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, getFileTitle());
-            Uri uri = Uri.fromFile(Database.getDataPath(this));
-            Log.v(App.TITLE, "exists: " + Database.getDataPath(this).exists());
             sharingIntent.putExtra(Intent.EXTRA_STREAM, uri);
             startActivity(Intent.createChooser(sharingIntent, "Share via"));
         }
