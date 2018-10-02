@@ -21,7 +21,6 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -29,6 +28,8 @@ public class MainActivity extends AppCompatActivity {
 
     private Button exportButton, clearButton;
     private Switch recorderSwitch;
+    private static final int PERMISSION_REQUEST_START_RECORDING = 1;
+    private static final int PERMISSION_REQUEST_EXPORT_DATA = 2;
     //private static final int CDMA_COORDINATE_DIVISOR = 3600 * 4;
 
     @Override
@@ -81,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
             return true;
         else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 0);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_START_RECORDING);
             return false;
         }
     }
@@ -90,20 +91,32 @@ public class MainActivity extends AppCompatActivity {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
             return true;
         else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 0);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_EXPORT_DATA);
             return false;
         }
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        for (int i=0 ; i<permissions.length ; i++) {
-            if (permissions[i] == Manifest.permission.ACCESS_COARSE_LOCATION && grantResults[i] == PackageManager.PERMISSION_GRANTED)
-                startRecording();
-            else if (permissions[i] == Manifest.permission.READ_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED)
-                exportData(null);
-            else
-                Toast.makeText(getApplicationContext(), "Permission not recognized: "+permissions[i], Toast.LENGTH_LONG).show();
+        switch (requestCode) {
+            case PERMISSION_REQUEST_START_RECORDING: {
+                if (permissions.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // permission granted
+                    startRecording();
+                } else {
+                    // permission denied
+                    LocationService.stop(getApplicationContext());
+                }
+                return;
+            }
+
+            case PERMISSION_REQUEST_EXPORT_DATA: {
+                if (permissions.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    exportData(null);
+                }
+
+                return;
+            }
         }
     }
 
