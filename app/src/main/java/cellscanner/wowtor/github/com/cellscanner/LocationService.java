@@ -81,19 +81,22 @@ public class LocationService extends Service {
         return null;
     }
 
-    private void scheduleRestart() {
+    private void scheduleRestart(int delay_millis) {
         Context context = getApplicationContext();
         Intent intent = new Intent(context, LocationService.class);
-        PendingIntent pendingIntent = PendingIntent.getService(context, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
 
-        AlarmManager alarmMgr = (AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
-        alarmMgr.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 60000, pendingIntent);
+        if (delay_millis == 0) {
+            startActivity(intent);
+        } else {
+            PendingIntent pendingIntent = PendingIntent.getService(context, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+            AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            alarmMgr.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + delay_millis, pendingIntent);
+        }
     }
 
     @Override
     public void onCreate() {
         running = true;
-        scheduleRestart();
 
         Log.v(App.TITLE, getClass().getName()+".onCreate()");
         Log.v(App.TITLE, "using db: "+getDataPath());
@@ -105,6 +108,7 @@ public class LocationService extends Service {
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
         //mTelephonyManager.listen(new MyPhoneStateListener(), PhoneStateListener.LISTEN_CELL_INFO  | PhoneStateListener.LISTEN_CELL_LOCATION | PhoneStateListener.LISTEN_SERVICE_STATE);
 
+        // schedule a periodic update
         final Handler handler = new Handler();
         Runnable timer = new Runnable() {
             @Override
@@ -117,8 +121,6 @@ public class LocationService extends Service {
             }
         };
         handler.post(timer);
-
-        updateServiceStatus("service started");
     }
 
     @Override
@@ -128,10 +130,10 @@ public class LocationService extends Service {
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         notificationManager.cancel(NOTIFICATION_CELLINFO);
 
-        if (running)
-            scheduleRestart();
+        updateServiceStatus("service killed (restarting)");
 
-        updateServiceStatus("service stopped");
+        if (running)
+            scheduleRestart(0);
     }
 
     private void createNotificationChannel() {
@@ -185,8 +187,6 @@ public class LocationService extends Service {
 
     @SuppressLint("MissingPermission")
     private void updateCellInfo() {
-        this.scheduleRestart();
-
         List<CellInfo> cellinfo = mTelephonyManager.getAllCellInfo();
         String[] cellstr;
         try {
