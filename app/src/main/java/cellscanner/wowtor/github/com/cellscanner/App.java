@@ -9,7 +9,7 @@ import java.io.File;
 
 public class App extends Application {
     public static final String TITLE = "cellscanner";
-    public static int UPDATE_DELAY_MILLIS = 4000;
+    public static int UPDATE_DELAY_MILLIS = 1000;
     public static int EVENT_VALIDITY_MILLIS = UPDATE_DELAY_MILLIS+20000;
 
     private static SQLiteOpenHelper dbhelper;
