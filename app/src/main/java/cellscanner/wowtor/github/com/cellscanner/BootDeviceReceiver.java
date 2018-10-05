@@ -19,7 +19,6 @@ public class BootDeviceReceiver extends BroadcastReceiver {
 
         Toast.makeText(context, message, Toast.LENGTH_LONG).show();
 
-        if(Intent.ACTION_BOOT_COMPLETED.equals(action))
-            LocationService.start(context);
+        LocationService.start(context);
     }
 }

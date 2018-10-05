@@ -13,9 +13,11 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.provider.SyncStateContract;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
+import android.support.v4.content.ContextCompat;
 import android.telephony.CellInfo;
 import android.telephony.CellLocation;
 import android.telephony.PhoneStateListener;
@@ -35,20 +37,91 @@ public class LocationService extends Service {
     private static int NOTIFICATION_CELLINFO = 0;
     private static int NOTIFICATION_STATUS = 1;
     private static int NOTIFICATION_ERROR = 2;
+    private static int NOTIFICATION_FOREGROUND = 3;
 
     private TelephonyManager mTelephonyManager;
     private Database db;
 
     private static boolean running = false;
 
+    //private static final boolean PREFER_BACKGROUND_SERVICE = false;
+    private static final boolean PREFER_FOREGROUND_SERVICE = true;
+
+    private interface ServiceHelper {
+        void startService(Context ctx);
+        void stopService(Context ctx);
+        void setup(LocationService service);
+        void cleanup(LocationService service);
+    }
+
+    private static ServiceHelper getHelper() {
+        if (PREFER_FOREGROUND_SERVICE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return new ServiceHelper() {
+
+                @Override
+                public void startService(Context ctx) {
+                    ContextCompat.startForegroundService(ctx, new Intent(ctx, LocationService.class));
+                }
+
+                @Override
+                public void stopService(Context ctx) {
+                    ctx.stopService(new Intent(ctx, LocationService.class));
+                }
+
+                @Override
+                public void setup(LocationService service) {
+                    service.createNotificationChannel();
+
+                    Intent intent = new Intent(service, MainActivity.class);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    PendingIntent pendingIntent = PendingIntent.getActivity(service, 0, intent, 0);
+
+                    NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(service, "default-channel")
+                            .setContentTitle(App.TITLE)
+                            .setContentText("running")
+                            .setSmallIcon(cellscanner.wowtor.github.com.cellscanner.R.drawable.ic_launcher_foreground)
+                            .setContentIntent(pendingIntent)
+                            .setPriority(NotificationCompat.PRIORITY_MIN);
+
+                    service.startForeground(NOTIFICATION_FOREGROUND, mBuilder.build());
+                }
+
+                @Override
+                public void cleanup(LocationService service) {
+                    service.stopForeground(true); //true will remove notification
+                }
+            };
+        } else {
+            return new ServiceHelper() {
+                @Override
+                public void startService(Context ctx) {
+                    ctx.startService(new Intent(ctx, LocationService.class));
+                }
+
+                @Override
+                public void stopService(Context ctx) {
+                    ctx.stopService(new Intent(ctx, LocationService.class));
+                }
+
+                @Override
+                public void setup(LocationService service) {
+                }
+
+                @Override
+                public void cleanup(LocationService service) {
+                }
+            };
+        }
+    }
+
     public static void start(Context ctx) {
         running = true;
-        ctx.startService(new Intent(ctx, LocationService.class));
+        getHelper().startService(ctx);
     }
 
     public static void stop(Context ctx) {
         running = false;
-        ctx.stopService(new Intent(ctx, LocationService.class));
+        getHelper().stopService(ctx);
     }
 
     public static boolean isRunning() {
@@ -98,6 +171,8 @@ public class LocationService extends Service {
     public void onCreate() {
         running = true;
 
+        getHelper().setup(this);
+
         Log.v(App.TITLE, getClass().getName()+".onCreate()");
         Log.v(App.TITLE, "using db: "+getDataPath());
         db = App.getDatabase();
@@ -125,6 +200,8 @@ public class LocationService extends Service {
 
     @Override
     public void onDestroy() {
+        getHelper().cleanup(this);
+
         Log.v(App.TITLE, getClass().getName()+".onDestroy()");
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
