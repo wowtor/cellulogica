@@ -1,7 +1,6 @@
 package cellscanner.wowtor.github.com.cellscanner;
 
 import android.Manifest;
-import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -24,8 +23,12 @@ import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
+    /*
+    Activity lifecycle, see: https://developer.android.com/guide/components/activities/activity-lifecycle
+     */
 
     private Button exportButton, clearButton;
     private Switch recorderSwitch;
@@ -38,9 +41,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(cellscanner.wowtor.github.com.cellscanner.R.layout.activity_main);
 
-        exportButton = (Button)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.exportButton);
-        clearButton = (Button)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.clearButton);
-        recorderSwitch = (Switch)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.recorderSwitch);
+        exportButton = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.exportButton);
+        clearButton = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.clearButton);
+        recorderSwitch = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.recorderSwitch);
 
         recorderSwitch.setChecked(LocationService.isRunning());
         exportButton.setEnabled(!LocationService.isRunning());
@@ -57,23 +60,27 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        Toast.makeText(getApplicationContext(), String.format("Cellscanner service is %srunning.", LocationService.isRunning() ? "" : "not "), Toast.LENGTH_SHORT).show();
+
         final Handler handler = new Handler();
         Runnable timer = new Runnable() {
             @Override
             public void run() {
-                Log.v(App.TITLE, "Update cell info");
                 updateLogViewer();;
                 handler.postDelayed(this, 1000);
             }
         };
         handler.post(timer);
-
-        Toast.makeText(getApplicationContext(), String.format("Cellscanner service is %srunning.", LocationService.isRunning() ? "" : "not "), Toast.LENGTH_SHORT).show();
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
     }
 
     @Override
@@ -100,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         switch (requestCode) {
             case PERMISSION_REQUEST_START_RECORDING: {
                 if (permissions.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -124,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static String getFileTitle() {
-        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
+        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss", Locale.US);
         return String.format("%s_cellinfo.sqlite3", fmt.format(new Date()));
     }
 
@@ -190,20 +197,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateLogViewer() {
-        TextView userMessages = (TextView)findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.userMessages);
+        TextView userMessages = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.userMessages);
         Database db = App.getDatabase();
         userMessages.setText(db.getUpdateStatus());
-    }
-
-    private boolean isServiceRunning(Class<?> serviceClass) {
-        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-            if (serviceClass.getName().equals(service.service.getClassName())) {
-                Log.i (App.TITLE, "service is running");
-                return true;
-            }
-        }
-        Log.i (App.TITLE, false+"");
-        return false;
     }
 }

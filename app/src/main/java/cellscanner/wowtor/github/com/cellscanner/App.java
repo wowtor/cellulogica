@@ -14,7 +14,7 @@ public class App extends Application {
 
     private static SQLiteOpenHelper dbhelper;
 
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = Database.VERSION;
 
     public static Database getDatabase() {
         return new Database(dbhelper.getWritableDatabase());

@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDatabaseLockedException;
 import android.provider.Settings;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoCdma;
@@ -17,12 +18,18 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.File;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 public class Database {
+    protected static final int VERSION = 2;
+
+    private static final String META_VERSION_CODE = "version_code";
+    private static final String META_ANDROID_ID = "android_id";
+
     private SQLiteDatabase db;
     private Date previous_date = null;
 
@@ -34,17 +41,48 @@ public class Database {
         this.db = db;
     }
 
+    private Long getLongFromSQL(String query) {
+        Cursor c = db.rawQuery(query, new String[]{});
+        c.moveToNext();
+        if (c.isNull(0)) {
+            return null;
+        } else {
+            return c.getLong(0);
+        }
+    }
+
+    private String[] getActiveCells(Date date) {
+        List<String> cells = new ArrayList<String>();
+        if (date != null) {
+            Cursor c = db.rawQuery("SELECT radio, mcc, mnc, area, cid FROM cellinfo WHERE ? BETWEEN date_start AND date_end", new String[]{Long.toString(date.getTime())});
+            while (c.moveToNext()) {
+                String radio = c.getString(0);
+                int mcc = c.getInt(1);
+                int mnc = c.getInt(2);
+                int lac = c.getInt(3);
+                int cid = c.getInt(4);
+                cells.add(String.format("%s: %d-%d-%d-%d", radio, mcc, mnc, lac, cid));
+            }
+        }
+
+        return cells.toArray(new String[]{});
+    }
+
+    private Date getTimestampFromSQL(String query) {
+        Long v = getLongFromSQL(query);
+        return v == null ? null : new Date(v);
+    }
+
     public String getUpdateStatus() {
-        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        DateFormat fmt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM);
+
+        Date last_update_time = getTimestampFromSQL("SELECT MAX(date_end) FROM cellinfo");
+        String[] current_cells = getActiveCells(last_update_time);
 
         StringBuffer s = new StringBuffer();
-        for (String tab : new String[]{"cellinfogsm", "cellinfocdma", "cellinfowcdma", "cellinfolte"}) {
-            Cursor c = db.rawQuery(String.format("SELECT MAX(date_end) FROM %s", tab), new String[]{});
-            c.moveToNext();
-            if (!c.isNull(0)) {
-                Date d = new Date(c.getLong(0));
-                s.append(String.format("%s: updated %s\n", tab, fmt.format(d)));
-            }
+        s.append(String.format("updated: %s\n", last_update_time == null ? "never" : fmt.format(last_update_time)));
+        for (String cell: current_cells) {
+            s.append(String.format("current cell: %s\n", cell));
         }
 
         return s.toString();
@@ -78,7 +116,7 @@ public class Database {
         } else if (info instanceof CellInfoLte) {
             return storeCellInfoLte(date, (CellInfoLte) info);
         } else {
-            Log.w("cellulogica", "Unrecognized cell info object");
+            Log.w(App.TITLE, "Unrecognized cell info object");
             return "unrecognized";
         }
     }
@@ -86,6 +124,7 @@ public class Database {
     private void updateCellInfo(String table, Date date, ContentValues values) {
         boolean contiguous = previous_date != null && date.getTime() < previous_date.getTime() + App.EVENT_VALIDITY_MILLIS;
 
+        // if the previous registration has the same values, update the end time only
         if (contiguous) {
             ContentValues update = new ContentValues();
             update.put("date_end", date.getTime());
@@ -104,39 +143,41 @@ public class Database {
                 return;
         }
 
+        // if there is no previous registration to be updated, create a new one
         ContentValues insert = new ContentValues(values);
         insert.put("date_start", date.getTime());
         insert.put("date_end", date.getTime());
-        Log.v("cellulogica", "new cell: "+insert);
+        Log.v(App.TITLE, "new cell: "+insert);
         db.insert(table, null, insert);
     }
 
     private static String toString(CellInfoGsm info) {
-        return String.format("%s/gsm:%d-%d-%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
+        return String.format("%sGSM: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
     }
 
     private static String toString(CellInfoCdma info) {
-        return String.format("%s/cdma:%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getBasestationId(), info.getCellIdentity().getNetworkId());
+        return String.format("%scdma:%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getBasestationId(), info.getCellIdentity().getNetworkId());
     }
 
     private static String toString(CellInfoWcdma info) {
-        return String.format("%s/wcdma:%d-%d-%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
+        return String.format("%sUMTS: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
     }
 
     private static String toString(CellInfoLte info) {
-        return String.format("%s/lte:%d-%d-%d-%d", info.isRegistered() ? "reg" : "unreg", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getTac(), info.getCellIdentity().getCi());
+        return String.format("%sLTE: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getTac(), info.getCellIdentity().getCi());
     }
 
     private String storeCellInfoGsm(Date date, CellInfoGsm info) {
         ContentValues content = new ContentValues();
         content.put("registered", info.isRegistered() ? 1 : 0);
+        content.put("radio", "GSM");
         content.put("mcc", info.getCellIdentity().getMcc());
         content.put("mnc", info.getCellIdentity().getMnc());
-        content.put("lac", info.getCellIdentity().getLac());
+        content.put("area", info.getCellIdentity().getLac());
         content.put("cid", info.getCellIdentity().getCid());
         content.put("bsic", info.getCellIdentity().getBsic());
         content.put("arfcn", info.getCellIdentity().getArfcn());
-        updateCellInfo("cellinfogsm", date, content);
+        updateCellInfo("cellinfo", date, content);
 
         return toString(info);
     }
@@ -157,13 +198,14 @@ public class Database {
     private String storeCellInfoWcdma(Date date, CellInfoWcdma info) {
         ContentValues content = new ContentValues();
         content.put("registered", info.isRegistered() ? 1 : 0);
+        content.put("radio", "UMTS");
         content.put("mcc", info.getCellIdentity().getMcc());
         content.put("mnc", info.getCellIdentity().getMnc());
-        content.put("lac", info.getCellIdentity().getLac());
+        content.put("area", info.getCellIdentity().getLac());
         content.put("cid", info.getCellIdentity().getCid());
         content.put("psc", info.getCellIdentity().getPsc());
         content.put("uarfcn", info.getCellIdentity().getUarfcn());
-        updateCellInfo("cellinfowcdma", date, content);
+        updateCellInfo("cellinfo", date, content);
 
         return toString(info);
     }
@@ -171,22 +213,15 @@ public class Database {
     private String storeCellInfoLte(Date date, CellInfoLte info) {
         ContentValues content = new ContentValues();
         content.put("registered", info.isRegistered() ? 1 : 0);
+        content.put("radio", "LTE");
         content.put("mcc", info.getCellIdentity().getMcc());
         content.put("mnc", info.getCellIdentity().getMnc());
-        content.put("tac", info.getCellIdentity().getTac());
-        content.put("ci", info.getCellIdentity().getCi());
+        content.put("area", info.getCellIdentity().getTac());
+        content.put("cid", info.getCellIdentity().getCi());
         content.put("pci", info.getCellIdentity().getPci());
-        updateCellInfo("cellinfolte", date, content);
+        updateCellInfo("cellinfo", date, content);
 
         return toString(info);
-    }
-
-    public void dropTables() {
-        db.execSQL("DROP TABLE IF EXISTS meta");
-        db.execSQL("DROP TABLE IF EXISTS cellinfogsm");
-        db.execSQL("DROP TABLE IF EXISTS cellinfocdma");
-        db.execSQL("DROP TABLE IF EXISTS cellinfowcdma");
-        db.execSQL("DROP TABLE IF EXISTS cellinfolte");
     }
 
     protected String getMetaEntry(String name) {
@@ -195,6 +230,15 @@ public class Database {
             return null;
 
         return c.getString(0);
+    }
+
+    protected void setMetaEntry(String name, String value) {
+        ContentValues content = new ContentValues();
+        content.put("entry", name);
+        content.put("value", value);
+        int n = db.update("meta", content, "entry = ?", new String[]{name});
+        if (n == 0)
+            db.insert("meta", null, content);
     }
 
     protected void storeVersionCode(Context ctx)
@@ -209,10 +253,7 @@ public class Database {
 
         int versionCode = pInfo.versionCode;
 
-        ContentValues content = new ContentValues();
-        content.put("entry", "versionCode");
-        content.put("value", versionCode);
-        db.insert("meta", null, content);
+        setMetaEntry(META_VERSION_CODE, Integer.toString(versionCode));
     }
 
     protected int getVersionCode() {
@@ -225,14 +266,11 @@ public class Database {
 
     protected void storePhoneID(Context ctx) {
         String android_id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
-
-        ContentValues content = new ContentValues();
-        content.put("entry", "android_id");
-        content.put("value", android_id);
-        db.insert("meta", null, content);
+        setMetaEntry("android_id", android_id);
     }
 
     protected static void upgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        createTables(db);
     }
 
     protected static void createTables(SQLiteDatabase db) {
@@ -241,16 +279,20 @@ public class Database {
                 "  value TEXT NOT NULL"+
                 ")");
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS cellinfogsm ("+
+        db.execSQL("CREATE TABLE IF NOT EXISTS cellinfo ("+
                 "  date_start INT NOT NULL,"+
                 "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+
+                "  radio VARCHAR(10) NOT NULL,"+ // radio technology (GSM, UMTS, LTE)
                 "  mcc INT NOT NULL,"+
                 "  mnc INT NOT NULL,"+
-                "  lac INT NOT NULL,"+ // Location Area Code
-                "  cid INT NOT NULL,"+ // Cell Identity
-                "  bsic INT NOT NULL,"+ // Base Station Identity Code
-                "  arfcn INT NOT NULL"+ // Absolute RF Channel Number
+                "  area INT NOT NULL,"+ // Location Area Code (GSM, UMTS) or TAC (LTE)
+                "  cid INT NOT NULL,"+ // Cell Identity (GSM: 16 bit; LTE: 28 bit)
+                "  bsic INT,"+ // Base Station Identity Code (GSM only)
+                "  arfcn INT,"+ // Absolute RF Channel Number (GSM only)
+                "  psc INT,"+ // 9-bit UMTS Primary Scrambling Code described in TS 25.331 (UMTS only/)
+                "  uarfcn INT,"+ // 16-bit UMTS Absolute RF Channel Number (UMTS only)
+                "  pci INT"+ // Physical Cell Id 0..503, Integer.MAX_VALUE if unknown (LTE only)
                 ")");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS cellinfocdma ("+
@@ -263,28 +305,11 @@ public class Database {
                 "  networkid INT NOT NULL,"+
                 "  systemid INT NOT NULL"+
                 ")");
+    }
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS cellinfowcdma ("+
-                "  date_start INT NOT NULL,"+
-                "  date_end INT NOT NULL,"+
-                "  registered INT NOT NULL,"+
-                "  mcc INT NOT NULL,"+
-                "  mnc INT NOT NULL,"+
-                "  lac INT NOT NULL,"+
-                "  cid INT NOT NULL,"+
-                "  psc INT NOT NULL,"+ // 9-bit UMTS Primary Scrambling Code described in TS 25.331
-                "  uarfcn INT NOT NULL"+ // 16-bit UMTS Absolute RF Channel Number
-                ")");
-
-        db.execSQL("CREATE TABLE IF NOT EXISTS cellinfolte ("+
-                "  date_start INT NOT NULL,"+
-                "  date_end INT NOT NULL,"+
-                "  registered INT NOT NULL,"+
-                "  mcc INT NOT NULL,"+
-                "  mnc INT NOT NULL,"+
-                "  tac INT NOT NULL,"+
-                "  ci INT NOT NULL,"+ // 28-bit Cell Identity
-                "  pci INT NOT NULL"+ // Physical Cell Id 0..503, Integer.MAX_VALUE if unknown
-                ")");
+    public void dropTables() {
+        db.execSQL("DROP TABLE IF EXISTS meta");
+        db.execSQL("DROP TABLE IF EXISTS cellinfo");
+        db.execSQL("DROP TABLE IF EXISTS cellinfocdma");
     }
 }
