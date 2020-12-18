@@ -1,4 +1,4 @@
-package cellscanner.wowtor.github.com.cellscanner;
+package nl.nfi.cellscanner;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

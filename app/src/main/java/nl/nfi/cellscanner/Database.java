@@ -1,4 +1,4 @@
-package cellscanner.wowtor.github.com.cellscanner;
+package nl.nfi.cellscanner;
 
 import android.content.ContentValues;
 import android.content.Context;
@@ -19,7 +19,6 @@ import android.util.Log;
 
 import java.io.File;
 import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;

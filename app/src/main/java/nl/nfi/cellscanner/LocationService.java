@@ -1,4 +1,4 @@
-package cellscanner.wowtor.github.com.cellscanner;
+package nl.nfi.cellscanner;
 
 import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
