@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Handler;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
@@ -66,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
         Runnable timer = new Runnable() {
             @Override
             public void run() {
-                updateLogViewer();;
+                updateLogViewer();
                 handler.postDelayed(this, 1000);
             }
         };
@@ -107,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
             case PERMISSION_REQUEST_START_RECORDING: {
                 if (permissions.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -117,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
                     // permission denied
                     LocationService.stop(getApplicationContext());
                 }
-                return;
+                break;
             }
 
             case PERMISSION_REQUEST_EXPORT_DATA: {
@@ -125,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
                     exportData(null);
                 }
 
-                return;
+                break;
             }
         }
     }

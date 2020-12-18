@@ -25,10 +25,11 @@ import android.widget.Toast;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
+import java.util.Locale;
 
 public class LocationService extends Service {
-    private static int NOTIFICATION_ERROR = 2;
-    private static int NOTIFICATION_STATUS = 3;
+    private static final int NOTIFICATION_ERROR = 2;
+    private static final int NOTIFICATION_STATUS = 3;
 
     private TelephonyManager mTelephonyManager;
     private Database db;
@@ -58,7 +59,7 @@ public class LocationService extends Service {
     public String getDataPath() {
         PackageManager m = getPackageManager();
         String s = getPackageName();
-        PackageInfo p = null;
+        PackageInfo p;
         try {
             p = m.getPackageInfo(s, 0);
         } catch (PackageManager.NameNotFoundException e) {
@@ -100,7 +101,7 @@ public class LocationService extends Service {
         db = App.getDatabase();
         db.storePhoneID(getApplicationContext());
         db.storeVersionCode(getApplicationContext());
-        Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT);
+        Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT).show();
 
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
 
@@ -134,7 +135,8 @@ public class LocationService extends Service {
             NotificationChannel channel = new NotificationChannel("default-channel", App.TITLE, importance);
             channel.setDescription("notification channel");
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            notificationManager.createNotificationChannel(channel);
+            if (notificationManager != null)
+                notificationManager.createNotificationChannel(channel);
         }
     }
 
@@ -176,7 +178,7 @@ public class LocationService extends Service {
             if (cellstr.length == 0)
                 cellstr = new String[]{"no data"};
         } catch(Throwable e) {
-            Toast.makeText(this, "error: "+e, Toast.LENGTH_SHORT);
+            Toast.makeText(this, "error: "+e, Toast.LENGTH_SHORT).show();
             sendErrorNotification(e);
             cellstr = new String[]{"error"};
         }
@@ -184,11 +186,12 @@ public class LocationService extends Service {
         Log.v(App.TITLE, "Update cell info: "+TextUtils.join(", ", cellstr));
 
         mBuilder
-                .setContentTitle(String.format("%d cells registered (%d visible)", cellstr.length, cellinfo.size()))
+                .setContentTitle(String.format(Locale.ROOT, "%d cells registered (%d visible)", cellstr.length, cellinfo.size()))
                 .setStyle(new NotificationCompat.BigTextStyle()
                         .bigText(TextUtils.join("\n", cellstr)));
 
         NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        mNotificationManager.notify(NOTIFICATION_STATUS, mBuilder.build());
+        if (mNotificationManager != null)
+            mNotificationManager.notify(NOTIFICATION_STATUS, mBuilder.build());
     }
 }

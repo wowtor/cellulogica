@@ -6,14 +6,12 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteDatabaseLockedException;
 import android.provider.Settings;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoCdma;
 import android.telephony.CellInfoGsm;
 import android.telephony.CellInfoLte;
 import android.telephony.CellInfoWcdma;
-import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -22,14 +20,15 @@ import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class Database {
     protected static final int VERSION = 2;
 
     private static final String META_VERSION_CODE = "version_code";
-    private static final String META_ANDROID_ID = "android_id";
+    private static final String META_GLOBAL_USER_ID = "global_user_id";
 
-    private SQLiteDatabase db;
+    private final SQLiteDatabase db;
     private Date previous_date = null;
 
     public static File getDataPath(Context ctx) {
@@ -41,26 +40,28 @@ public class Database {
     }
 
     private Long getLongFromSQL(String query) {
-        Cursor c = db.rawQuery(query, new String[]{});
-        c.moveToNext();
-        if (c.isNull(0)) {
-            return null;
-        } else {
-            return c.getLong(0);
+        try (Cursor c = db.rawQuery(query, new String[]{})) {
+            c.moveToNext();
+            if (c.isNull(0)) {
+                return null;
+            } else {
+                return c.getLong(0);
+            }
         }
     }
 
     private String[] getActiveCells(Date date) {
-        List<String> cells = new ArrayList<String>();
+        List<String> cells = new ArrayList<>();
         if (date != null) {
-            Cursor c = db.rawQuery("SELECT radio, mcc, mnc, area, cid FROM cellinfo WHERE ? BETWEEN date_start AND date_end", new String[]{Long.toString(date.getTime())});
-            while (c.moveToNext()) {
-                String radio = c.getString(0);
-                int mcc = c.getInt(1);
-                int mnc = c.getInt(2);
-                int lac = c.getInt(3);
-                int cid = c.getInt(4);
-                cells.add(String.format("%s: %d-%d-%d-%d", radio, mcc, mnc, lac, cid));
+            try (Cursor c = db.rawQuery("SELECT radio, mcc, mnc, area, cid FROM cellinfo WHERE ? BETWEEN date_start AND date_end", new String[]{Long.toString(date.getTime())})) {
+                while (c.moveToNext()) {
+                    String radio = c.getString(0);
+                    int mcc = c.getInt(1);
+                    int mnc = c.getInt(2);
+                    int lac = c.getInt(3);
+                    int cid = c.getInt(4);
+                    cells.add(String.format(Locale.ROOT, "%s: %d-%d-%d-%d", radio, mcc, mnc, lac, cid));
+                }
             }
         }
 
@@ -78,7 +79,7 @@ public class Database {
         Date last_update_time = getTimestampFromSQL("SELECT MAX(date_end) FROM cellinfo");
         String[] current_cells = getActiveCells(last_update_time);
 
-        StringBuffer s = new StringBuffer();
+        StringBuilder s = new StringBuilder();
         s.append(String.format("updated: %s\n", last_update_time == null ? "never" : fmt.format(last_update_time)));
         for (String cell: current_cells) {
             s.append(String.format("current cell: %s\n", cell));
@@ -95,7 +96,7 @@ public class Database {
     public String[] storeCellInfo(List<CellInfo> lst) {
         Date date = new Date();
 
-        List<String> cells = new ArrayList<String>();
+        List<String> cells = new ArrayList<>();
         for (CellInfo info : lst) {
             if (isValid(info))
                 cells.add(storeCellInfo(date, info));
@@ -128,8 +129,8 @@ public class Database {
             ContentValues update = new ContentValues();
             update.put("date_end", date.getTime());
 
-            ArrayList<String> qwhere = new ArrayList<String>();
-            ArrayList<String> qargs = new ArrayList<String>();
+            ArrayList<String> qwhere = new ArrayList<>();
+            ArrayList<String> qargs = new ArrayList<>();
             qwhere.add("date_end = ?");
             qargs.add(Long.toString(previous_date.getTime()));
             for (String key : values.keySet()) {
@@ -151,19 +152,19 @@ public class Database {
     }
 
     private static String toString(CellInfoGsm info) {
-        return String.format("%sGSM: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
+        return String.format(Locale.ROOT, "%sGSM: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
     }
 
     private static String toString(CellInfoCdma info) {
-        return String.format("%scdma:%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getBasestationId(), info.getCellIdentity().getNetworkId());
+        return String.format(Locale.ROOT, "%scdma:%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getBasestationId(), info.getCellIdentity().getNetworkId());
     }
 
     private static String toString(CellInfoWcdma info) {
-        return String.format("%sUMTS: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
+        return String.format(Locale.ROOT, "%sUMTS: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
     }
 
     private static String toString(CellInfoLte info) {
-        return String.format("%sLTE: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getTac(), info.getCellIdentity().getCi());
+        return String.format(Locale.ROOT, "%sLTE: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getTac(), info.getCellIdentity().getCi());
     }
 
     private String storeCellInfoGsm(Date date, CellInfoGsm info) {
@@ -224,11 +225,12 @@ public class Database {
     }
 
     protected String getMetaEntry(String name) {
-        Cursor c = db.query("meta", new String[]{"value"}, "entry = ?", new String[]{"versionCode"}, null, null, null);
-        if (!c.moveToNext())
-            return null;
+        try (Cursor c = db.query("meta", new String[]{"value"}, "entry = ?", new String[]{name}, null, null, null)) {
+            if (!c.moveToNext())
+                return null;
 
-        return c.getString(0);
+            return c.getString(0);
+        }
     }
 
     protected void setMetaEntry(String name, String value) {
@@ -242,7 +244,7 @@ public class Database {
 
     protected void storeVersionCode(Context ctx)
     {
-        PackageInfo pInfo = null;
+        PackageInfo pInfo;
         try {
             pInfo = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
         } catch (PackageManager.NameNotFoundException e) {
@@ -264,8 +266,9 @@ public class Database {
     }
 
     protected void storePhoneID(Context ctx) {
+        // TODO: replace by some random number
         String android_id = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
-        setMetaEntry("android_id", android_id);
+        setMetaEntry(META_GLOBAL_USER_ID, android_id);
     }
 
     protected static void upgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -304,11 +307,5 @@ public class Database {
                 "  networkid INT NOT NULL,"+
                 "  systemid INT NOT NULL"+
                 ")");
-    }
-
-    public void dropTables() {
-        db.execSQL("DROP TABLE IF EXISTS meta");
-        db.execSQL("DROP TABLE IF EXISTS cellinfo");
-        db.execSQL("DROP TABLE IF EXISTS cellinfocdma");
     }
 }
