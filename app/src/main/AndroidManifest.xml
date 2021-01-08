@@ -16,7 +16,7 @@
         android:theme="@style/AppTheme">
 
         <receiver
-            android:name=".BootDeviceReceiver"
+            android:name=".autostart"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -25,7 +25,14 @@
         </receiver>
 
         <service
+            android:name=".service"
+            android:enabled="true"
+            android:exported="true"></service>
+
+        <service
             android:name=".LocationService"
+            android:enabled="true"
+            android:exported="true"
             android:label="location service" >
         </service>
 

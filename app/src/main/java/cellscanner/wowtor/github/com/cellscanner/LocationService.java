@@ -52,6 +52,7 @@ public class LocationService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Toast.makeText(getBaseContext(), "onStartCommand", Toast.LENGTH_LONG).show();
         return Service.START_STICKY;
     }
 
@@ -79,6 +80,7 @@ public class LocationService extends Service {
     @Override
     public void onCreate() {
         running = true;
+        Toast.makeText(getBaseContext(), "onCreate", Toast.LENGTH_LONG).show();
         ContextCompat.startForegroundService(this, new Intent(this, LocationService.class));
 
         createNotificationChannel();
