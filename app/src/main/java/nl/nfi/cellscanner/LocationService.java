@@ -1,5 +1,6 @@
 package nl.nfi.cellscanner;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -9,10 +10,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
 import android.support.v4.content.ContextCompat;
@@ -24,10 +30,12 @@ import android.widget.Toast;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class LocationService extends Service {
+public class LocationService extends Service implements LocationListener {
     private static final int NOTIFICATION_ERROR = 2;
     private static final int NOTIFICATION_STATUS = 3;
 
@@ -73,7 +81,7 @@ public class LocationService extends Service {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        Log.v(App.TITLE, getClass().getName()+".onBind()");
+        Log.v(App.TITLE, getClass().getName() + ".onBind()");
         return null;
     }
 
@@ -90,20 +98,25 @@ public class LocationService extends Service {
 
         mBuilder = new NotificationCompat.Builder(this, "default-channel")
                 .setContentTitle(App.TITLE)
-                .setSmallIcon(cellscanner.wowtor.github.com.cellscanner.R.drawable.ic_launcher_foreground)
+                .setSmallIcon(nl.nfi.cellscanner.R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
                 .setPriority(NotificationCompat.PRIORITY_MIN);
 
         startForeground(NOTIFICATION_STATUS, mBuilder.build());
 
-        Log.v(App.TITLE, getClass().getName()+".onCreate()");
-        Log.v(App.TITLE, "using db: "+getDataPath());
+        Log.v(App.TITLE, getClass().getName() + ".onCreate()");
+        Log.v(App.TITLE, "using db: " + getDataPath());
         db = App.getDatabase();
-        db.storePhoneID(getApplicationContext());
-        db.storeVersionCode(getApplicationContext());
-        Toast.makeText(this, "using db: "+getDataPath(), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "using db: " + getDataPath(), Toast.LENGTH_SHORT).show();
 
+        // initialize telephony manager (for cell updates)
         mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+
+        // start request for location updates (for GPS updates)
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            locationManager.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER, 5000, 100, this);
+        }
 
         // schedule a periodic update
         final Handler handler = new Handler();
@@ -111,7 +124,7 @@ public class LocationService extends Service {
             @Override
             public void run() {
                 if (running) {
-                    updateCellInfo();
+                    periodicUpdate();
                     handler.postDelayed(this, App.UPDATE_DELAY_MILLIS);
                 }
             }
@@ -121,8 +134,9 @@ public class LocationService extends Service {
 
     @Override
     public void onDestroy() {
-        Log.v(App.TITLE, getClass().getName()+".onDestroy()");
+        Log.v(App.TITLE, getClass().getName() + ".onDestroy()");
 
+        db.close();
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         notificationManager.cancel(NOTIFICATION_STATUS);
     }
@@ -147,7 +161,7 @@ public class LocationService extends Service {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
 
         mBuilder = mBuilder
-                .setSmallIcon(cellscanner.wowtor.github.com.cellscanner.R.drawable.ic_launcher_foreground)
+                .setSmallIcon(nl.nfi.cellscanner.R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
                 .setPriority(NotificationCompat.PRIORITY_MIN);
 
@@ -169,12 +183,52 @@ public class LocationService extends Service {
         updateNotification(NOTIFICATION_ERROR, mBuilder);
     }
 
-    @SuppressLint("MissingPermission")
-    private void updateCellInfo() {
+    private String[] storeCellInfo(List<CellInfo> lst) {
+        Date date = new Date();
+
+        List<String> cells = new ArrayList<>();
+        for (CellInfo info : lst) {
+            try {
+                CellStatus status = CellStatus.fromCellInfo(info);
+                if (status.isValid()) {
+                    db.updateCellStatus(date, status);
+                    cells.add(status.toString());
+                }
+            } catch (CellStatus.UnsupportedTypeException e) {
+                db.storeMessage(e.getMessage());
+            }
+        }
+
+        return cells.toArray(new String[0]);
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        db.updateGpsStatus(new Date(), location);
+    }
+
+    @Override
+    public void onStatusChanged(String s, int i, Bundle bundle) {
+    }
+
+    @Override
+    public void onProviderEnabled(String s) {
+    }
+
+    @Override
+    public void onProviderDisabled(String s) {
+    }
+
+    private void periodicUpdate() {
+        db.updateRecordingStatus(new Date(), db.getCellRecordingStatus(), db.getGpsRecordingStatus());
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+            return;
+
         List<CellInfo> cellinfo = mTelephonyManager.getAllCellInfo();
         String[] cellstr;
         try {
-            cellstr = db.storeCellInfo(cellinfo);
+            cellstr = storeCellInfo(cellinfo);
             if (cellstr.length == 0)
                 cellstr = new String[]{"no data"};
         } catch(Throwable e) {

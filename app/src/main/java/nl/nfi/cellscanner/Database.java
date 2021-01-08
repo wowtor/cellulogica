@@ -6,12 +6,9 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.location.Location;
+import android.os.Build;
 import android.provider.Settings;
-import android.telephony.CellInfo;
-import android.telephony.CellInfoCdma;
-import android.telephony.CellInfoGsm;
-import android.telephony.CellInfoLte;
-import android.telephony.CellInfoWcdma;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -27,9 +24,10 @@ public class Database {
 
     private static final String META_VERSION_CODE = "version_code";
     private static final String META_GLOBAL_USER_ID = "global_user_id";
+    private static final String META_CELL_RECORDING_STATUS = "cell_recording_status";
+    private static final String META_GPS_RECORDING_STATUS = "gps_recording_status";
 
     private final SQLiteDatabase db;
-    private Date previous_date = null;
 
     public static File getDataPath(Context ctx) {
         return new File(ctx.getExternalFilesDir(null), "cellinfo.sqlite3");
@@ -37,6 +35,26 @@ public class Database {
 
     public Database(SQLiteDatabase db) {
         this.db = db;
+    }
+
+    public void close() {
+        db.close();
+    }
+
+    public void setCellRecordingStatus(boolean value) {
+        setMetaEntry(META_CELL_RECORDING_STATUS, Boolean.toString(value));
+    }
+
+    public boolean getCellRecordingStatus() {
+        return Boolean.valueOf(getMetaEntry(META_CELL_RECORDING_STATUS, Boolean.toString(false)));
+    }
+
+    public void setGpsRecordingStatus(boolean value) {
+        setMetaEntry(META_GPS_RECORDING_STATUS, Boolean.toString(value));
+    }
+
+    public boolean getGpsRecordingStatus() {
+        return Boolean.valueOf(getMetaEntry(META_GPS_RECORDING_STATUS, Boolean.toString(false)));
     }
 
     private Long getLongFromSQL(String query) {
@@ -53,7 +71,7 @@ public class Database {
     private String[] getActiveCells(Date date) {
         List<String> cells = new ArrayList<>();
         if (date != null) {
-            try (Cursor c = db.rawQuery("SELECT radio, mcc, mnc, area, cid FROM cellinfo WHERE ? BETWEEN date_start AND date_end", new String[]{Long.toString(date.getTime())})) {
+            try (Cursor c = db.rawQuery("SELECT radio, mcc, mnc, area, cid FROM cell_status WHERE ? BETWEEN date_start AND date_end", new String[]{Long.toString(date.getTime())})) {
                 while (c.moveToNext()) {
                     String radio = c.getString(0);
                     int mcc = c.getInt(1);
@@ -73,10 +91,21 @@ public class Database {
         return v == null ? null : new Date(v);
     }
 
+    private Date getLastUpdateTime(String table) {
+        return getTimestampFromSQL("SELECT MAX(date_end) FROM "+table);
+    }
+
+    private boolean isContiguous(Date first, Date second) {
+        if (first == null || second == null)
+            return false;
+
+        return second.getTime() < first.getTime() + App.EVENT_VALIDITY_MILLIS;
+    }
+
     public String getUpdateStatus() {
         DateFormat fmt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM);
 
-        Date last_update_time = getTimestampFromSQL("SELECT MAX(date_end) FROM cellinfo");
+        Date last_update_time = getLastUpdateTime("cell_status");
         String[] current_cells = getActiveCells(last_update_time);
 
         StringBuilder s = new StringBuilder();
@@ -88,41 +117,51 @@ public class Database {
         return s.toString();
     }
 
-    public boolean isValid(CellInfo info) {
-        // TODO: improve by example https://github.com/zamojski/TowerCollector/tree/master/app/src/main/java/info/zamojski/soft/towercollector/collector/validators
-        return info.isRegistered();
-    }
+    /**
+     * Update the current recording status.
+     *
+     * @param date current date
+     * @param record_cell current cell recording status
+     * @param record_gps current GPS recording status
+     */
+    public void updateRecordingStatus(Date date, boolean record_cell, boolean record_gps) {
+        Date previous_date = getLastUpdateTime("recording_status");
+        boolean contiguous = isContiguous(previous_date, date);
 
-    public String[] storeCellInfo(List<CellInfo> lst) {
-        Date date = new Date();
+        // if the previous registration has the same values, update the end time only
+        if (contiguous) {
+            ContentValues update = new ContentValues();
+            update.put("date_end", date.getTime());
 
-        List<String> cells = new ArrayList<>();
-        for (CellInfo info : lst) {
-            if (isValid(info))
-                cells.add(storeCellInfo(date, info));
+            String qwhere = "date_end = ? AND record_cell = ? AND record_gps = ?";
+            String[] qargs = new String[]{Long.toString(previous_date.getTime()), record_cell ? "1" : "0", record_gps ? "1" : "0"};
+
+            int nrows = db.update("recording_status", update, qwhere, qargs);
+            if (nrows > 0)
+                return;
         }
 
-        previous_date = date;
-        return cells.toArray(new String[0]);
+        // if there is no previous registration to be updated, create a new one
+        ContentValues insert = new ContentValues();
+        insert.put("date_start", date.getTime());
+        insert.put("date_end", date.getTime());
+        insert.put("record_cell", record_cell ? 1 : 0);
+        insert.put("record_gps", record_gps ? 1 : 0);
+        Log.v(App.TITLE, "new recording status: "+insert);
+        db.insert("recording_status", null, insert);
     }
 
-    public String storeCellInfo(Date date, CellInfo info) {
-        if (info instanceof CellInfoGsm) {
-            return storeCellInfoGsm(date, (CellInfoGsm)info);
-        } else if (info instanceof CellInfoCdma) {
-            return storeCellInfoCdma(date, (CellInfoCdma)info);
-        } else if (info instanceof CellInfoWcdma) {
-            return storeCellInfoWcdma(date, (CellInfoWcdma)info);
-        } else if (info instanceof CellInfoLte) {
-            return storeCellInfoLte(date, (CellInfoLte) info);
-        } else {
-            Log.w(App.TITLE, "Unrecognized cell info object");
-            return "unrecognized";
-        }
-    }
+    /**
+     * Update the current cellular connection status.
+     *
+     * @param date the current date
+     * @param status the cellular connection status
+     */
+    public void updateCellStatus(Date date, CellStatus status) {
+        Date previous_date = getLastUpdateTime("cell_status");
+        boolean contiguous = isContiguous(previous_date, date);
 
-    private void updateCellInfo(String table, Date date, ContentValues values) {
-        boolean contiguous = previous_date != null && date.getTime() < previous_date.getTime() + App.EVENT_VALIDITY_MILLIS;
+        ContentValues values = status.getContentValues();
 
         // if the previous registration has the same values, update the end time only
         if (contiguous) {
@@ -135,10 +174,13 @@ public class Database {
             qargs.add(Long.toString(previous_date.getTime()));
             for (String key : values.keySet()) {
                 qwhere.add(String.format("%s = ?", key));
-                qargs.add(values.getAsString(key));
+                if (key.equals("registered"))
+                    qargs.add("1");
+                else
+                    qargs.add(values.getAsString(key));
             }
 
-            int nrows = db.update(table, update, TextUtils.join(" AND ", qwhere), qargs.toArray(new String[0]));
+            int nrows = db.update("cell_status", update, TextUtils.join(" AND ", qwhere), qargs.toArray(new String[0]));
             if (nrows > 0)
                 return;
         }
@@ -147,87 +189,65 @@ public class Database {
         ContentValues insert = new ContentValues(values);
         insert.put("date_start", date.getTime());
         insert.put("date_end", date.getTime());
-        Log.v(App.TITLE, "new cell: "+insert);
-        db.insert(table, null, insert);
+        Log.v(App.TITLE, "new cell: "+insert.toString());
+        db.insert("cell_status", null, insert);
     }
 
-    private static String toString(CellInfoGsm info) {
-        return String.format(Locale.ROOT, "%sGSM: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
-    }
+    /**
+     * Update the current GPS status.
+     *
+     * @param date the current date
+     * @param location the current location
+     */
+    public void updateGpsStatus(Date date, Location location) {
+        Date previous_date = getLastUpdateTime("gps_status");
+        boolean contiguous = isContiguous(previous_date, date);
 
-    private static String toString(CellInfoCdma info) {
-        return String.format(Locale.ROOT, "%scdma:%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getBasestationId(), info.getCellIdentity().getNetworkId());
-    }
+        // if the previous registration has the same values, update the end time only
+        if (contiguous) {
+            ContentValues update = new ContentValues();
+            update.put("date_end", date.getTime());
 
-    private static String toString(CellInfoWcdma info) {
-        return String.format(Locale.ROOT, "%sUMTS: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getLac(), info.getCellIdentity().getCid());
-    }
+            ArrayList<String> qwhere = new ArrayList<>();
+            ArrayList<String> qargs = new ArrayList<>();
+            qwhere.add("date_end = ? AND (latitude BETWEEN ? AND ?) AND (longitude BETWEEN ? AND ?) AND (altitude BETWEEN ? AND ?)");
+            qargs.add(Long.toString(previous_date.getTime()));
+            qargs.add(Double.toString(location.getLongitude() - App.GPS_TOLERANCE_X));
+            qargs.add(Double.toString(location.getLongitude() + App.GPS_TOLERANCE_X));
+            qargs.add(Double.toString(location.getLatitude() - App.GPS_TOLERANCE_Y));
+            qargs.add(Double.toString(location.getLatitude() + App.GPS_TOLERANCE_Y));
+            qargs.add(Double.toString(location.getAltitude() - App.GPS_TOLERANCE_Z));
+            qargs.add(Double.toString(location.getAltitude() + App.GPS_TOLERANCE_Z));
 
-    private static String toString(CellInfoLte info) {
-        return String.format(Locale.ROOT, "%sLTE: %d-%d-%d-%d", info.isRegistered() ? "" : "unregistered: ", info.getCellIdentity().getMcc(), info.getCellIdentity().getMnc(), info.getCellIdentity().getTac(), info.getCellIdentity().getCi());
-    }
+            int nrows = db.update("gps_status", update, TextUtils.join(" AND ", qwhere), qargs.toArray(new String[0]));
+            if (nrows > 0)
+                return;
+        }
 
-    private String storeCellInfoGsm(Date date, CellInfoGsm info) {
-        ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered() ? 1 : 0);
-        content.put("radio", "GSM");
-        content.put("mcc", info.getCellIdentity().getMcc());
-        content.put("mnc", info.getCellIdentity().getMnc());
-        content.put("area", info.getCellIdentity().getLac());
-        content.put("cid", info.getCellIdentity().getCid());
-        content.put("bsic", info.getCellIdentity().getBsic());
-        content.put("arfcn", info.getCellIdentity().getArfcn());
-        updateCellInfo("cellinfo", date, content);
+        // if there is no previous registration to be updated, create a new one
+        ContentValues insert = new ContentValues();
+        insert.put("date_start", date.getTime());
+        insert.put("date_end", date.getTime());
+        insert.put("longitude", location.getLongitude());
+        insert.put("latitude", location.getLatitude());
+        insert.put("altitude", location.getAltitude());
+        insert.put("accuracy", location.getAccuracy());
 
-        return toString(info);
-    }
+        if (Build.VERSION.SDK_INT >= 26)
+            insert.put("vertical_accuracy", location.getVerticalAccuracyMeters());
 
-    private String storeCellInfoCdma(Date date, CellInfoCdma info) {
-        ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered() ? 1 : 0);
-        content.put("basestationid", info.getCellIdentity().getBasestationId());
-        content.put("latitude", info.getCellIdentity().getLatitude());
-        content.put("longitude", info.getCellIdentity().getLongitude());
-        content.put("networkid", info.getCellIdentity().getNetworkId());
-        content.put("systemid", info.getCellIdentity().getSystemId());
-        updateCellInfo("cellinfocdma", date, content);
-
-        return toString(info);
-    }
-
-    private String storeCellInfoWcdma(Date date, CellInfoWcdma info) {
-        ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered() ? 1 : 0);
-        content.put("radio", "UMTS");
-        content.put("mcc", info.getCellIdentity().getMcc());
-        content.put("mnc", info.getCellIdentity().getMnc());
-        content.put("area", info.getCellIdentity().getLac());
-        content.put("cid", info.getCellIdentity().getCid());
-        content.put("psc", info.getCellIdentity().getPsc());
-        content.put("uarfcn", info.getCellIdentity().getUarfcn());
-        updateCellInfo("cellinfo", date, content);
-
-        return toString(info);
-    }
-
-    private String storeCellInfoLte(Date date, CellInfoLte info) {
-        ContentValues content = new ContentValues();
-        content.put("registered", info.isRegistered() ? 1 : 0);
-        content.put("radio", "LTE");
-        content.put("mcc", info.getCellIdentity().getMcc());
-        content.put("mnc", info.getCellIdentity().getMnc());
-        content.put("area", info.getCellIdentity().getTac());
-        content.put("cid", info.getCellIdentity().getCi());
-        content.put("pci", info.getCellIdentity().getPci());
-        updateCellInfo("cellinfo", date, content);
-
-        return toString(info);
+        Log.v(App.TITLE, "new GPS location: "+insert);
+        db.insert("gps_status", null, insert);
     }
 
     protected String getMetaEntry(String name) {
+        return getMetaEntry(name, null);
+    }
+
+    protected String getMetaEntry(String name, String default_value) {
         try (Cursor c = db.query("meta", new String[]{"value"}, "entry = ?", new String[]{name}, null, null, null)) {
             if (!c.moveToNext())
-                return null;
+                return default_value;
 
             return c.getString(0);
         }
@@ -271,8 +291,20 @@ public class Database {
         setMetaEntry(META_GLOBAL_USER_ID, android_id);
     }
 
-    protected static void upgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+    public void storeMessage(String msg) {
+        // reduce length if necessary to prevent database errors
+        if (msg.length() > 250)
+            msg = msg.substring(0, 250);
+
+        ContentValues content = new ContentValues();
+        content.put("date", new Date().getTime());
+        content.put("message", msg);
+        db.insert("message", null, content);
+    }
+
+    protected void upgrade(int oldVersion, int newVersion, Context ctx) {
         createTables(db);
+        storeVersionCode(ctx);
     }
 
     protected static void createTables(SQLiteDatabase db) {
@@ -281,7 +313,29 @@ public class Database {
                 "  value TEXT NOT NULL"+
                 ")");
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS cellinfo ("+
+        db.execSQL("CREATE TABLE IF NOT EXISTS message ("+
+                "  date INT NOT NULL,"+
+                "  message VARCHAR(250) NOT NULL"+
+                ")");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS recording_status ("+
+                "  date_start INT NOT NULL,"+
+                "  date_end INT NOT NULL,"+
+                "  record_cell BOOL NOT NULL,"+
+                "  record_gps BOOL NOT NULL"+
+                ")");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS gps_status ("+
+                "  date_start INT NOT NULL,"+
+                "  date_end INT NOT NULL,"+
+                "  longitude FLOAT NOT NULL,"+
+                "  latitude FLOAT NOT NULL,"+
+                "  accuracy FLOAT NOT NULL,"+
+                "  altitude FLOAT NOT NULL,"+
+                "  vertical_accuracy FLOAT"+
+                ")");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS cell_status ("+
                 "  date_start INT NOT NULL,"+
                 "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+
@@ -297,7 +351,7 @@ public class Database {
                 "  pci INT"+ // Physical Cell Id 0..503, Integer.MAX_VALUE if unknown (LTE only)
                 ")");
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS cellinfocdma ("+
+        db.execSQL("CREATE TABLE IF NOT EXISTS cdma_status ("+
                 "  date_start INT NOT NULL,"+
                 "  date_end INT NOT NULL,"+
                 "  registered INT NOT NULL,"+

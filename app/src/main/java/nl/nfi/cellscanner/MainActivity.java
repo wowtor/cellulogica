@@ -32,32 +32,50 @@ public class MainActivity extends AppCompatActivity {
      */
 
     private Button exportButton, clearButton;
-    private Switch recorderSwitch;
-    private static final int PERMISSION_REQUEST_START_RECORDING = 1;
-    private static final int PERMISSION_REQUEST_EXPORT_DATA = 2;
+    private Switch cellRecorderSwitch;
+    private Switch gpsRecorderSwitch;
+    private static final int PERMISSION_REQUEST_START_CELL_RECORDING = 1;
+    private static final int PERMISSION_REQUEST_START_GPS_RECORDING = 2;
+    private static final int PERMISSION_REQUEST_EXPORT_DATA = 3;
     //private static final int CDMA_COORDINATE_DIVISOR = 3600 * 4;
+
+    Database db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(cellscanner.wowtor.github.com.cellscanner.R.layout.activity_main);
+        setContentView(nl.nfi.cellscanner.R.layout.activity_main);
 
-        exportButton = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.exportButton);
-        clearButton = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.clearButton);
-        recorderSwitch = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.recorderSwitch);
+        db = App.getDatabase();
 
-        recorderSwitch.setChecked(LocationService.isRunning());
+        exportButton = findViewById(nl.nfi.cellscanner.R.id.exportButton);
+        clearButton = findViewById(nl.nfi.cellscanner.R.id.clearButton);
+        cellRecorderSwitch = findViewById(nl.nfi.cellscanner.R.id.cellRecorderSwitch);
+        gpsRecorderSwitch = findViewById(nl.nfi.cellscanner.R.id.gpsRecorderSwitch);
+
+        cellRecorderSwitch.setChecked(db.getCellRecordingStatus());
+        gpsRecorderSwitch.setChecked(db.getGpsRecordingStatus());
+        gpsRecorderSwitch.setEnabled(db.getCellRecordingStatus());
+
         exportButton.setEnabled(!LocationService.isRunning());
         clearButton.setEnabled(!LocationService.isRunning());
 
-        recorderSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        cellRecorderSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                exportButton.setEnabled(!isChecked);
-                clearButton.setEnabled(!isChecked);
                 if (isChecked)
-                    startRecording();
-                else
-                    stopRecording();
+                    enableCellRecording();
+                else {
+                    db.setCellRecordingStatus(false);
+                    onRecordingStatusChanged();
+                }
+                gpsRecorderSwitch.setEnabled(isChecked);
+            }
+        });
+
+        gpsRecorderSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                db.setGpsRecordingStatus(isChecked);
+                onRecordingStatusChanged();
             }
         });
 
@@ -72,6 +90,40 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         handler.post(timer);
+    }
+
+    private void enableCellRecording() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            db.setCellRecordingStatus(true);
+            onRecordingStatusChanged();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_START_CELL_RECORDING);
+        }
+    }
+
+    private void enableGpsRecording() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            db.setGpsRecordingStatus(true);
+            onRecordingStatusChanged();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSION_REQUEST_START_GPS_RECORDING);
+        }
+    }
+
+    private void onRecordingStatusChanged() {
+        boolean is_active = db.getCellRecordingStatus();
+        exportButton.setEnabled(!is_active);
+        clearButton.setEnabled(!is_active);
+        if (is_active)
+            startRecording();
+        else
+            stopRecording();
+    }
+
+    @Override
+    protected void onDestroy() {
+        db.close();
+        super.onDestroy();
     }
 
     @Override
@@ -89,34 +141,37 @@ public class MainActivity extends AppCompatActivity {
         super.onStop();
     }
 
-    private boolean requestLocationPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-            return true;
-        else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_START_RECORDING);
-            return false;
-        }
-    }
-
     private boolean requestFilePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+        return true;
+        /*
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
             return true;
         else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_EXPORT_DATA);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_REQUEST_EXPORT_DATA);
             return false;
         }
+         */
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
-            case PERMISSION_REQUEST_START_RECORDING: {
+            case PERMISSION_REQUEST_START_CELL_RECORDING: {
                 if (permissions.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // permission granted
-                    startRecording();
+                    enableCellRecording();
                 } else {
                     // permission denied
-                    LocationService.stop(getApplicationContext());
+                }
+                break;
+            }
+
+            case PERMISSION_REQUEST_START_GPS_RECORDING: {
+                if (permissions.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // permission granted
+                    enableGpsRecording();
+                } else {
+                    // permission denied
                 }
                 break;
             }
@@ -161,7 +216,9 @@ public class MainActivity extends AppCompatActivity {
                 Context ctx = getApplicationContext();
                 switch (which){
                     case DialogInterface.BUTTON_POSITIVE:
+                        db.close();
                         App.resetDatabase(getApplicationContext());
+                        db = App.getDatabase();
                         Toast.makeText(ctx, "database deleted", Toast.LENGTH_SHORT).show();
                         break;
 
@@ -179,13 +236,9 @@ public class MainActivity extends AppCompatActivity {
 
     public void startRecording() {
         Context ctx = getApplicationContext();
-        if (requestLocationPermission()) {
-            LocationService.start(this);
-            Toast.makeText(ctx, "Location service started", Toast.LENGTH_SHORT).show();
-            Log.v(App.TITLE, "Location service started");
-        } else {
-            Toast.makeText(ctx, "no permission -- try again", Toast.LENGTH_SHORT).show();
-        }
+        LocationService.start(this);
+        Toast.makeText(ctx, "Location service started", Toast.LENGTH_SHORT).show();
+        Log.v(App.TITLE, "Location service started");
     }
 
     public void stopRecording() {
@@ -193,12 +246,10 @@ public class MainActivity extends AppCompatActivity {
         Context ctx = getApplicationContext();
         Toast.makeText(ctx, "Location service stopped", Toast.LENGTH_SHORT).show();
         Log.v(App.TITLE, "Location service stopped");
-        exportButton.setEnabled(true);
-        clearButton.setEnabled(true);
     }
 
     private void updateLogViewer() {
-        TextView userMessages = findViewById(cellscanner.wowtor.github.com.cellscanner.R.id.userMessages);
+        TextView userMessages = findViewById(nl.nfi.cellscanner.R.id.userMessages);
         Database db = App.getDatabase();
         userMessages.setText(db.getUpdateStatus());
     }
